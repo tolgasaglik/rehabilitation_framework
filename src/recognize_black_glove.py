@@ -1,7 +1,11 @@
+import sys
 import cv2
 import numpy as np
 
 cap = cv2.VideoCapture(0)
+if cap.isOpened() == False :
+	print "Failed to open video capture stream! Aborting..."
+	sys.exit()
 
 # Set up blob detector with parameters (goal is to find black concave blobs)
 params = cv2.SimpleBlobDetector_Params()
@@ -45,19 +49,21 @@ while(1):
 
 	# Detect blobs
 	keypoints = detector.detect(frame_hsv_with_mask)
- 
 
 	# find contours of glove and draw them on image
-	frame_with_contours, contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
-	cv2.convexHull(contours, hull)
-	print hull
-	cv2.drawContours(frame_with_contours, contours, -1, (255,255,0), 3)
+	frame_with_contours, contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+	if len(contours) > 0:
+		#print "Contours detected! Number of point coordinates in image: ", str(len(contours))
+		hull = cv2.convexHull(contours[0])
+		#print hull
+		cv2.drawContours(frame_hsv_with_mask, contours, -1, (0,255,0), 3)
+
+		# calculate centroid of glove
+		
  
 	# Show keypoints
-	if len(contours) > 0:
-		print "Contours detected! Number of objects in image: ", str(len(contours))
-	cv2.imshow("Mask", mask)
-	cv2.imshow("Countours found", frame_with_contours)
+	#cv2.imshow("Mask", mask)
+	cv2.imshow("Countours found", frame_hsv_with_mask)
 	if cv2.waitKey(1) & 0xFF == ord('q'):
         	break
 
