@@ -2,6 +2,8 @@
 
 import cv2
 import numpy as np
+import sys
+import argparse
 
 from os.path import expanduser
 import os
@@ -15,6 +17,14 @@ import shlex, subprocess
 #       C         |      B
 #                 |y=0.1
 
+# argument parsing
+parser = argparse.ArgumentParser(description='Reads video footage from a camera or a video file, and performs the Rehazenter exercise on it.')
+parser.add_argument('--width', type=int, help='width of the camera window')
+parser.add_argument('--height', type=int, help='height of the camera window')
+parser.add_argument('--path-to-video', '-p', type=str, help='file path to the video file (default: webcam)')
+parser.add_argument('--path-to-object-folder', '-f', type=str, help='path to the folder where the object\'s image samples are stored')
+parser.add_argument('--path-to-output-video', '-o', type=str, help='path to the output video that contains the modified input video with the detected object contours')
+args = parser.parse_args()
 
 
 # HSV color thresholds for YELLOW
@@ -24,6 +34,10 @@ import shlex, subprocess
 # Webcam parameters (your desired resolution)
 CAMERA_WIDTH = 320
 CAMERA_HEIGHT = 240
+if args.width != None:
+	CAMERA_WIDTH = args.width
+if args.height != None:
+	CAMERA_HEIGHT = args.height
 
 # Minimum required radius of enclosing circle of contour
 MIN_RADIUS = 2
@@ -33,26 +47,30 @@ HAND_MOV_THRESHOLD_LEFT = CAMERA_WIDTH / 4
 HAND_MOV_THRESHOLD_RIGHT = HAND_MOV_THRESHOLD_LEFT * 3
 
 # Initialize camera and get actual resolution
-cap = cv2.VideoCapture(0)
+if args.path_to_video == None:
+	cap = cv2.VideoCapture(0)
+else:
+	cap = cv2.VideoCapture(args.path_to_video)
+
+# check if camera/video file was opened successfully
+if cap.isOpened() == False :
+        print "Failed to open video capture stream! Aborting..."
+        sys.exit()
+
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
 camWidth = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
 camHeight = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-print str(camWidth)
-print  str(camHeight)
+#print str(camWidth)
+#print str(camHeight)
 
-# below line expands to user's home directory, should work on most systems
-#resource=expanduser("~") + "/Downloads/capture1.mp4"
-#print "Resource path: ", resource
-#resource="/home/user/Downloads/IMG_8074.MOV"
-
-
+# define some trivial variables for our main loop
 last_moment = 0        
 moment_status = 0  
 last_moment_status = 0
 loop = 0
 
-# variable that tracks direction in which patient should currently moving his hand
+# variable that tracks direction in which patient should currently move his hand
 hand_is_moving_right = True
 
 # stores number of exercise repetitions done so far
@@ -62,6 +80,7 @@ repetitions = 0
 fourcc = cv2.VideoWriter_fourcc(*'mp4v') # Be sure to use the lower case
 out = cv2.VideoWriter('output.mp4', fourcc, 20.0, (568, 516))
 
+print "Camera dimensions: " +  str(VIDEO_WIDTH) + " x " + str(VIDEO_HEIGHT)
 
 #out = cv2.VideoWriter('./video.avi', -1, 20.0, (568,320))
 # Main loop
@@ -77,8 +96,6 @@ while True:
     VIDEO_WIDTH = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
     VIDEO_HEIGHT = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
 
-    print VIDEO_WIDTH
-    print VIDEO_HEIGHT
     # Blur image to remove noise
     img_filter = cv2.GaussianBlur(img.copy(), (3, 3), 0)
 
@@ -138,7 +155,7 @@ while True:
    
     last_moment_status = moment_status    
     
-    # check if hand movement thresholds have been reached
+    # check if hand movement thresholds have been reached and count repetitions accordingly 
     if center != None :
 	if hand_is_moving_right == True and center[0] > HAND_MOV_THRESHOLD_RIGHT :
 		hand_is_moving_right = False
@@ -159,6 +176,7 @@ while True:
 
     font = cv2.FONT_HERSHEY_SIMPLEX
     cv2.putText(img,str(loop),(10,50), font, 1,(0,0,255),2)
+    cv2.putText(img,"Repetitions: " + str(repetitions),(10,80), font, 1,(0,0,255),2)
     
     # Show image windows
     cv2.imshow('webcam', img)
