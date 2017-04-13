@@ -18,8 +18,8 @@ import shlex, subprocess
 
 
 # HSV color thresholds for YELLOW
-THRESHOLD_LOW = (15, 210, 20);
-THRESHOLD_HIGH = (35, 255, 255);
+#THRESHOLD_LOW = (15, 210, 20);
+#THRESHOLD_HIGH = (35, 255, 255);
 
 # Webcam parameters (your desired resolution)
 CAMERA_WIDTH = 320
@@ -28,34 +28,40 @@ CAMERA_HEIGHT = 240
 # Minimum required radius of enclosing circle of contour
 MIN_RADIUS = 2
 
+# define X position thresholds for hand movement
+HAND_MOV_THRESHOLD_LEFT = CAMERA_WIDTH / 4
+HAND_MOV_THRESHOLD_RIGHT = HAND_MOV_THRESHOLD_LEFT * 3
+
 # Initialize camera and get actual resolution
-cam = cv2.VideoCapture(0)
-cam.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
-cam.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
-camWidth = cam.get(cv2.CAP_PROP_FRAME_WIDTH)
-camHeight = cam.get(cv2.CAP_PROP_FRAME_HEIGHT)
+cap = cv2.VideoCapture(0)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_HEIGHT)
+camWidth = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+camHeight = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
 print str(camWidth)
 print  str(camHeight)
 
 # below line expands to user's home directory, should work on most systems
-resource=expanduser("~") + "/Downloads/capture1.mp4"
-print "Resource path: ", resource
+#resource=expanduser("~") + "/Downloads/capture1.mp4"
+#print "Resource path: ", resource
 #resource="/home/user/Downloads/IMG_8074.MOV"
 
-cap = cv2.VideoCapture(resource)
-if not cap.isOpened():
-    print "Error opening resource: " + str(resource)
-    print "Maybe opencv VideoCapture can't open it"
-    exit(0)
 
 last_moment = 0        
 moment_status = 0  
 last_moment_status = 0
 loop = 0
 
+# variable that tracks direction in which patient should currently moving his hand
+hand_is_moving_right = True
+
+# stores number of exercise repetitions done so far
+repetitions = 0
+
 # Define the codec and create VideoWriter object
 fourcc = cv2.VideoWriter_fourcc(*'mp4v') # Be sure to use the lower case
 out = cv2.VideoWriter('output.mp4', fourcc, 20.0, (568, 516))
+
 
 #out = cv2.VideoWriter('./video.avi', -1, 20.0, (568,320))
 # Main loop
@@ -80,8 +86,13 @@ while True:
     img_filter = cv2.cvtColor(img_filter, cv2.COLOR_BGR2HSV)
     
     # define range of blue color in HSV
-    THRESHOLD_LOW = np.array([110,50,50], dtype=np.uint8)
-    THRESHOLD_HIGH = np.array([130,255,255], dtype=np.uint8)
+    #THRESHOLD_LOW = np.array([110,50,50], dtype=np.uint8)
+    #THRESHOLD_HIGH = np.array([130,255,255], dtype=np.uint8)
+
+    # range of black/grayish color in HSV (not recommended for usage due to huge amounts of noise)
+    # (TODO: try to come up with a way to get the object and its color dynamically from some images in a folder f.ex., given as a parameter)
+    THRESHOLD_LOW = np.array([60,15,0], dtype=np.uint8)
+    THRESHOLD_HIGH = np.array([105,170,110], dtype=np.uint8)
     
     # Set pixels to white if in color range, others to black (binary bitmap)
     img_binary = cv2.inRange(img_filter.copy(), THRESHOLD_LOW, THRESHOLD_HIGH)
@@ -119,7 +130,7 @@ while True:
             
         if ( moment_status != last_moment_status):
             #last_moment_status = moment_status
-            print "Ouyahh :" + str(loop)
+            #print "Ouyahh :" + str(loop)
             loop += 1
             #os.system('rosrun sound_play say.py "yes"')
             #subprocess.call(["rosrun", "sound_play say.py \"yes\""])
@@ -127,6 +138,16 @@ while True:
    
     last_moment_status = moment_status    
     
+    # check if hand movement thresholds have been reached
+    if center != None :
+	if hand_is_moving_right == True and center[0] > HAND_MOV_THRESHOLD_RIGHT :
+		hand_is_moving_right = False
+		repetitions += 1
+		print "Current number of repetitions done: " + str(repetitions)
+    	elif hand_is_moving_right == False and center[0] < HAND_MOV_THRESHOLD_LEFT :
+		hand_is_moving_right = True
+
+    #print "Current center position of glove: ", center
     
     # Print out the location and size (radius) of the largest detected contour
     #if center != None:
