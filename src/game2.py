@@ -137,8 +137,11 @@ if __name__ == '__main__':
 	MIN_RADIUS = 2
 
 	# define X position thresholds for hand movement
-	HAND_MOV_THRESHOLD_LEFT = CAMERA_WIDTH / 4
-	HAND_MOV_THRESHOLD_RIGHT = HAND_MOV_THRESHOLD_LEFT * 3
+	HAND_MOV_X_THRESHOLD_LEFT = (CAMERA_WIDTH / 4) * 3
+	HAND_MOV_X_THRESHOLD_RIGHT = (CAMERA_WIDTH / 4) * 1.55	# multiply with some tolerance value for more impaired people
+	# define Y position thresholds for hand movement
+	HAND_MOV_Y_THRESHOLD_LEFT = ((CAMERA_HEIGHT / 4) * 3) * 0.75	# multiply with some tolerance value, same as above
+	HAND_MOV_Y_THRESHOLD_RIGHT = CAMERA_HEIGHT / 4
 
 	# Initialize camera and get actual resolution
 	if PATH_TO_VIDEO == "":
@@ -173,7 +176,7 @@ if __name__ == '__main__':
 
 	# launch ROS communication handler
 	encourager = EncouragerUnit(10)
-	print "Camera dimensions: " +  str(CAMERA_WIDTH) + " x " + str(CAMERA_HEIGHT)
+	print "Camera dimensions: " +  str(cv2.CAP_PROP_FRAME_WIDTH) + " x " + str(cv2.CAP_PROP_FRAME_HEIGHT)
 	print "Press the \"q\" key to quit."
 
 	# Main loop
@@ -233,11 +236,11 @@ if __name__ == '__main__':
 
 		# check if hand movement thresholds have been reached and count repetitions accordingly 
 		if center != None :
-			if hand_is_moving_right == True and center[0] > HAND_MOV_THRESHOLD_RIGHT :
+			if hand_is_moving_right == True and center[0] < HAND_MOV_X_THRESHOLD_RIGHT and center[1] < HAND_MOV_Y_THRESHOLD_RIGHT :
 				hand_is_moving_right = False
 				encourager.incRepCounter()
 				print "Current number of repetitions done: " + str(encourager.repetitions)
-			elif hand_is_moving_right == False and center[0] < HAND_MOV_THRESHOLD_LEFT :
+			elif hand_is_moving_right == False and center[0] > HAND_MOV_X_THRESHOLD_LEFT and center[1] > HAND_MOV_Y_THRESHOLD_LEFT :
 				hand_is_moving_right = True
 
 		#print "Current center position of glove: ", center
