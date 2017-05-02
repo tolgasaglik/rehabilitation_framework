@@ -11,6 +11,8 @@ from std_msgs.msg import String
 from os.path import expanduser
 import os
 import shlex, subprocess
+from threading import Thread
+from time import sleep
 
 #                 |y=-0.1
 #        D        |      A
@@ -52,7 +54,13 @@ class EncouragerUnit(object):
 			self.pub.publish(self.sentences[2])
 
 
-
+# implementation of a custom timer thread that simply counts seconds up to some defined limit
+class Timer(Thread):
+	seconds = 0
+	def __init__(self, seconds):
+		self.seconds = seconds
+	def run(self):
+		sleep(seconds)
 
 
 
@@ -62,6 +70,7 @@ class EncouragerUnit(object):
 # ************************************************************************************
 if __name__ == '__main__':
 	# set trivial variables and parse arguments
+	CALIBRATION_DURATION_SECS = 5
 	CAMERA_WIDTH = 640
 	CAMERA_HEIGHT = 480
 	PATH_TO_VIDEO = ""
@@ -163,6 +172,8 @@ if __name__ == '__main__':
 	last_moment_status = 0
 	loop = 0
 	has_motivated = False
+	has_calibrated = False
+	timer = None
 
 	# variable that tracks direction in which patient should currently move his hand
 	hand_is_moving_right = True
@@ -236,12 +247,29 @@ if __name__ == '__main__':
 
 		# check if hand movement thresholds have been reached and count repetitions accordingly 
 		if center != None :
-			if hand_is_moving_right == True and center[0] < HAND_MOV_X_THRESHOLD_RIGHT and center[1] < HAND_MOV_Y_THRESHOLD_RIGHT :
-				hand_is_moving_right = False
-				encourager.incRepCounter()
-				print "Current number of repetitions done: " + str(encourager.repetitions)
-			elif hand_is_moving_right == False and center[0] > HAND_MOV_X_THRESHOLD_LEFT and center[1] > HAND_MOV_Y_THRESHOLD_LEFT :
-				hand_is_moving_right = True
+			if has_calibrated == True:
+				if hand_is_moving_right == True and center[0] < HAND_MOV_X_THRESHOLD_RIGHT and center[1] < HAND_MOV_Y_THRESHOLD_RIGHT :
+					hand_is_moving_right = False
+					encourager.incRepCounter()
+					print "Current number of repetitions done: " + str(encourager.repetitions)
+				elif hand_is_moving_right == False and center[0] > HAND_MOV_X_THRESHOLD_LEFT and center[1] > HAND_MOV_Y_THRESHOLD_LEFT :
+					hand_is_moving_right = True
+			else:
+				if timer == None:
+					timer = Timer(CALIBRATION_DURATION_SECS)
+				elif timer.is_alive() == True:
+					if hand_is_moving_right == True:
+						HAND_MOV_X_THRESHOLD_RIGHT = center[0]
+						HAND_MOV_Y_THRESHOLD_RIGHT = center[1]
+						hand_is_moving_right = False
+						del timer
+						timer = None
+					else:
+						HAND_MOV_X_THRESHOLD_LEFT = center[0]
+						HAND_MOV_Y_THRESHOLD_LEFT = center[1]
+						has_calibrated = True
+						hand_is_moving_right = True
+						# TODO: inform person that calibration process has finished
 
 		#print "Current center position of glove: ", center
 	    
