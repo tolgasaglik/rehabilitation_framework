@@ -53,14 +53,23 @@ class EncouragerUnit(object):
 		elif self.repetitions == self.repetitions_limit:
 			self.pub.publish(self.sentences[2])
 
+	def sayCalibLeft(self):
+		self.pub.publish("Now, move your arm to the left, and hold the position for 5 seconds.")
+	def sayCalibRight(self):
+		self.pub.publish("Please lay your arm strechted out on the table in front of you, and hold the position for 5 seconds.")
+	def sayCalibSuccess(self):
+		self.pub.publish("Callibration completed! You may begin your exercise now.")
+		
+
 
 # implementation of a custom timer thread that simply counts seconds up to some defined limit
 class Timer(Thread):
 	seconds = 0
 	def __init__(self, seconds):
 		self.seconds = seconds
+		Thread.__init__(self)
 	def run(self):
-		sleep(seconds)
+		sleep(self.seconds)
 
 
 
@@ -70,7 +79,7 @@ class Timer(Thread):
 # ************************************************************************************
 if __name__ == '__main__':
 	# set trivial variables and parse arguments
-	CALIBRATION_DURATION_SECS = 5
+	CALIBRATION_DURATION_SECS = 10
 	CAMERA_WIDTH = 640
 	CAMERA_HEIGHT = 480
 	PATH_TO_VIDEO = ""
@@ -151,6 +160,10 @@ if __name__ == '__main__':
 	# define Y position thresholds for hand movement
 	HAND_MOV_Y_THRESHOLD_LEFT = ((CAMERA_HEIGHT / 4) * 3) * 0.75	# multiply with some tolerance value, same as above
 	HAND_MOV_Y_THRESHOLD_RIGHT = CAMERA_HEIGHT / 4
+
+	# define tolerance values for both axis, in case we're calibrating manually
+	TOLERANCE_X = CAMERA_WIDTH / 4
+	TOLERANCE_Y = CAMERA_HEIGHT / 4
 
 	# Initialize camera and get actual resolution
 	if PATH_TO_VIDEO == "":
@@ -248,28 +261,33 @@ if __name__ == '__main__':
 		# check if hand movement thresholds have been reached and count repetitions accordingly 
 		if center != None :
 			if has_calibrated == True:
-				if hand_is_moving_right == True and center[0] < HAND_MOV_X_THRESHOLD_RIGHT and center[1] < HAND_MOV_Y_THRESHOLD_RIGHT :
+				if hand_is_moving_right == True and abs(center[0]-HAND_MOV_X_THRESHOLD_RIGHT) < TOLERANCE_X and abs(center[1]-HAND_MOV_Y_THRESHOLD_RIGHT) < TOLERANCE_Y :
 					hand_is_moving_right = False
 					encourager.incRepCounter()
 					print "Current number of repetitions done: " + str(encourager.repetitions)
-				elif hand_is_moving_right == False and center[0] > HAND_MOV_X_THRESHOLD_LEFT and center[1] > HAND_MOV_Y_THRESHOLD_LEFT :
+				elif hand_is_moving_right == False and abs(center[0]-HAND_MOV_X_THRESHOLD_LEFT) < TOLERANCE_X and abs(center[1]-HAND_MOV_Y_THRESHOLD_LEFT) < TOLERANCE_Y :
 					hand_is_moving_right = True
 			else:
 				if timer == None:
 					timer = Timer(CALIBRATION_DURATION_SECS)
-				elif timer.is_alive() == True:
+					timer.start()
+					if hand_is_moving_right == True:
+						encourager.sayCalibRight()
+				elif timer != None and timer.is_alive() == False:
 					if hand_is_moving_right == True:
 						HAND_MOV_X_THRESHOLD_RIGHT = center[0]
 						HAND_MOV_Y_THRESHOLD_RIGHT = center[1]
 						hand_is_moving_right = False
 						del timer
 						timer = None
+						encourager.sayCalibLeft()
 					else:
 						HAND_MOV_X_THRESHOLD_LEFT = center[0]
 						HAND_MOV_Y_THRESHOLD_LEFT = center[1]
 						has_calibrated = True
 						hand_is_moving_right = True
-						# TODO: inform person that calibration process has finished
+						encourager.sayCalibSuccess()
+
 
 		#print "Current center position of glove: ", center
 	    
