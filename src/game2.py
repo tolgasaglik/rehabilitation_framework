@@ -46,12 +46,16 @@ class EncouragerUnit(object):
 	def incRepCounter(self):
 		self.repetitions += 1
 		self.pub.publish(str(self.repetitions))
+		rospy.loginfo("Current number of repetitions done: " +str(self.repetitions))
 		if self.repetitions == self.repetitions_limit/2:
 			self.pub.publish(self.sentences[0])
+			rospy.loginfo(self.sentences[0])
 		elif self.repetitions == self.repetitions_limit-1:
 			self.pub.publish(self.sentences[1])
+			rospy.loginfo(self.sentences[1])
 		elif self.repetitions == self.repetitions_limit:
 			self.pub.publish(self.sentences[2])
+			rospy.loginfo(self.sentences[2])
 
 	def sayCalibLeft(self):
 		self.pub.publish("Now, move your arm to the left, and hold the position for 5 seconds.")
@@ -94,6 +98,7 @@ if __name__ == '__main__':
 	parser.add_argument('--width', type=int, dest="width", help='width of the camera window')
 	parser.add_argument('--height', type=int, dest="height", help='height of the camera window')
 	parser.add_argument('--path-to-video', '-p', type=str, dest="path_to_video", help='file path to the video file (default: webcam)')
+	parser.add_argument('--calibrate', '-m', action="store_true", dest="calibrate", help='pass this flag to enable manual calibration of hand position thresholds')
 	#parser.add_argument('--path-to-samples-folder', '-f', type=str, dest="arg_path_to_samples_folder", help='path to the folder where the object\'s image samples are stored')
 	parser.add_argument('--path-to-output-video', '-o', type=str, dest="path_to_output_video", help='path to the output video that contains the modified input video with the detected object contours')
 	parser.add_argument('--color', '-c', type=str, dest="color", help='the color of the object that should be tracked (default=yellow)')
@@ -162,8 +167,8 @@ if __name__ == '__main__':
 	HAND_MOV_Y_THRESHOLD_RIGHT = CAMERA_HEIGHT / 4
 
 	# define tolerance values for both axis, in case we're calibrating manually
-	TOLERANCE_X = CAMERA_WIDTH / 4
-	TOLERANCE_Y = CAMERA_HEIGHT / 4
+	TOLERANCE_X = CAMERA_WIDTH / 6
+	TOLERANCE_Y = CAMERA_HEIGHT / 6
 
 	# Initialize camera and get actual resolution
 	if PATH_TO_VIDEO == "":
@@ -185,7 +190,8 @@ if __name__ == '__main__':
 	last_moment_status = 0
 	loop = 0
 	has_motivated = False
-	has_calibrated = False
+	has_calibrated = not args.calibrate
+	print has_calibrated
 	timer = None
 
 	# variable that tracks direction in which patient should currently move his hand
@@ -264,7 +270,6 @@ if __name__ == '__main__':
 				if hand_is_moving_right == True and abs(center[0]-HAND_MOV_X_THRESHOLD_RIGHT) < TOLERANCE_X and abs(center[1]-HAND_MOV_Y_THRESHOLD_RIGHT) < TOLERANCE_Y :
 					hand_is_moving_right = False
 					encourager.incRepCounter()
-					print "Current number of repetitions done: " + str(encourager.repetitions)
 				elif hand_is_moving_right == False and abs(center[0]-HAND_MOV_X_THRESHOLD_LEFT) < TOLERANCE_X and abs(center[1]-HAND_MOV_Y_THRESHOLD_LEFT) < TOLERANCE_Y :
 					hand_is_moving_right = True
 			else:
