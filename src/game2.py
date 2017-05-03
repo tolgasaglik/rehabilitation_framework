@@ -58,11 +58,17 @@ class EncouragerUnit(object):
 			rospy.loginfo(self.sentences[2])
 
 	def sayCalibLeft(self):
-		self.pub.publish("Now, move your arm to the left, and hold the position for 5 seconds.")
+		sentence = "Now, move your arm to the left, and hold the position for 5 seconds."
+		self.pub.publish(sentence)
+		rospy.loginfo(sentence)
 	def sayCalibRight(self):
-		self.pub.publish("Please lay your arm strechted out on the table in front of you, and hold the position for 5 seconds.")
+		sentence = "Please lay your arm strechted out on the table in front of you, and hold the position for 5 seconds."
+		self.pub.publish(sentence)
+		rospy.loginfo(sentence)
 	def sayCalibSuccess(self):
-		self.pub.publish("Callibration completed! You may begin your exercise now.")
+		sentence = "Callibration completed! You may begin your exercise now."
+		self.pub.publish(sentence)
+		rospy.loginfo(sentence)
 		
 
 
@@ -167,8 +173,8 @@ if __name__ == '__main__':
 	HAND_MOV_Y_THRESHOLD_RIGHT = CAMERA_HEIGHT / 4
 
 	# define tolerance values for both axis, in case we're calibrating manually
-	TOLERANCE_X = CAMERA_WIDTH / 6
-	TOLERANCE_Y = CAMERA_HEIGHT / 6
+	TOLERANCE_X = CAMERA_WIDTH / 8
+	TOLERANCE_Y = CAMERA_HEIGHT / 8
 
 	# Initialize camera and get actual resolution
 	if PATH_TO_VIDEO == "":
