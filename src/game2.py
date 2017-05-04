@@ -175,6 +175,10 @@ if __name__ == '__main__':
 	# define tolerance values for both axis, in case we're calibrating manually
 	TOLERANCE_X = CAMERA_WIDTH / 8
 	TOLERANCE_Y = CAMERA_HEIGHT / 8
+	if CAMERA_WIDTH > 2*CAMERA_HEIGHT:
+		CAMERA_WIDTH = CAMERA_WIDTH / 6
+	elif 2*CAMERA_WIDTH < CAMERA_HEIGHT:
+		CAMERA_HEIGHT = CAMERA_HEIGHT / 6
 
 	# Initialize camera and get actual resolution
 	if PATH_TO_VIDEO == "":
@@ -298,6 +302,9 @@ if __name__ == '__main__':
 						has_calibrated = True
 						hand_is_moving_right = True
 						encourager.sayCalibSuccess()
+
+						# TODO: adapt tolerance values to stored X/Y coordinates from calibration process?
+						
 
 
 		#print "Current center position of glove: ", center
