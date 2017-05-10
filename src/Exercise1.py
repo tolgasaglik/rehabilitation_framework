@@ -10,7 +10,8 @@ import rospkg
 from std_msgs.msg import String
 from os.path import expanduser
 import os
-import shlex, subprocess
+import shlex
+from subprocess import Popen,PIPE,STDOUT
 from threading import Thread
 from time import sleep
 
@@ -25,15 +26,20 @@ from time import sleep
 class EncouragerUnit(object):
 	repetitions = 0
 	repetitions_limit = 0
-	pub = None
 	sentences = []
 	ENC_SENT_FILELOC = "/config/encouragement_sentences.txt"
 
-	def __init__(self, repetitions_limit):
-		self.repetitions_limit = repetitions_limit
+	def __init__(self, repetitions_limit=10, spawnRosNodes=False):
+		if spawnRosNodes==True:
+			# launch roscore, wm_voice_manager and soundplay
+			self.roscore_node = Popen(['roscore'], stdout=None, stderr=None)
+			sleep(0.2)
+			self.soundplay_node = Popen(['rosrun', 'sound_play', 'soundplay_node.py'], stdout=None, stderr=None)
+			self.wm_voice_generator_node = Popen(['rosrun', 'wm_voice_generator', 'wm_voice_component_short.py'], stdout=None, stderr=None)
 		rospy.init_node('reha_game')
 		self.pub = rospy.Publisher('/robot/voice', String)
 		self.load_sentences()
+		self.repetitions_limit = repetitions_limit
 
 	def load_sentences(self):
 		# retrieve path to reha_game ROS package and load sentences file
@@ -42,6 +48,13 @@ class EncouragerUnit(object):
 		sentences_file = open(reha_game_pkg_path + self.ENC_SENT_FILELOC, "r")
 		self.sentences = sentences_file.readlines()
 		sentences_file.close()
+
+	def initExercise(self, width=640, height=480):
+		self.exercise_node = Popen(['rosrun', 'reha_game', 'Exercise1.py', '--width', str(width), '--height', str(height)], bufsize=1, stdout=PIPE, stderr=STDOUT)
+
+	def stopExercise(self):
+		self.exercise_node.terminate()
+		self.exercise_node.wait()
 
 	def incRepCounter(self):
 		self.repetitions += 1
@@ -94,6 +107,7 @@ class Exercise1Game(object):
 	PATH_TO_OUTPUT_VIDEO = ""
 	COLOR = "yellow"
 	HAS_CALIBRATED = True
+	encourager = None
 
 	def __init__(self, argv):
 		#print rospy.myargv()[1:]
@@ -113,7 +127,7 @@ class Exercise1Game(object):
 		# checking color argument
 		if args.color != "yellow" and args.color != "blue" and args.color != "black" and args.color:
 			print "Unrecognized color! Setting color back to default (yellow)."
-		else:
+		elif args.color != None:
 			self.COLOR = args.color
 
 		# checking camera dimensions (TODO: check if correct!)
@@ -133,7 +147,7 @@ class Exercise1Game(object):
 		#      rospy.logwarn("CAscade parameters need to be set to start recognizer.")
 		#      return
 
-	def startGame(self):
+	def startGame(self, spawnEncUnit=True):
 		# set HSV color thresholds
 		if self.COLOR == "blue":
 			# HSV color thresholds for BLUE
@@ -213,8 +227,12 @@ class Exercise1Game(object):
 		else:
 			out = cv2.VideoWriter(self.PATH_TO_OUTPUT_VIDEO, fourcc, 20.0, (568, 516))
 
-		# launch ROS communication handler
-		encourager = EncouragerUnit(10)
+		# launch ROS communication handler (if not started already through GUI)
+		if spawnEncUnit == True:
+			self.encourager = EncouragerUnit(10)
+		elif self.encourager == None:
+			print "Encouragement unit not started! Aborting..."
+			sys.exit()
 		print "Camera dimensions: " +  str(cv2.CAP_PROP_FRAME_WIDTH) + " x " + str(cv2.CAP_PROP_FRAME_HEIGHT)
 		print "Press the \"q\" key to quit."
 
@@ -278,7 +296,7 @@ class Exercise1Game(object):
 				if self.HAS_CALIBRATED == True:
 					if hand_is_moving_right == True and abs(center[0]-HAND_MOV_X_THRESHOLD_RIGHT) < TOLERANCE_X and abs(center[1]-HAND_MOV_Y_THRESHOLD_RIGHT) < TOLERANCE_Y :
 						hand_is_moving_right = False
-						encourager.incRepCounter()
+						self.encourager.incRepCounter()
 					elif hand_is_moving_right == False and abs(center[0]-HAND_MOV_X_THRESHOLD_LEFT) < TOLERANCE_X and abs(center[1]-HAND_MOV_Y_THRESHOLD_LEFT) < TOLERANCE_Y :
 						hand_is_moving_right = True
 				else:
@@ -286,7 +304,7 @@ class Exercise1Game(object):
 						timer = Timer(self.CALIBRATION_DURATION_SECS)
 						timer.start()
 						if hand_is_moving_right == True:
-							encourager.sayCalibRight()
+							self.encourager.sayCalibRight()
 					elif timer != None and timer.is_alive() == False:
 						if hand_is_moving_right == True:
 							HAND_MOV_X_THRESHOLD_RIGHT = center[0]
@@ -294,13 +312,13 @@ class Exercise1Game(object):
 							hand_is_moving_right = False
 							del timer
 							timer = None
-							encourager.sayCalibLeft()
+							self.encourager.sayCalibLeft()
 						else:
 							HAND_MOV_X_THRESHOLD_LEFT = center[0]
 							HAND_MOV_Y_THRESHOLD_LEFT = center[1]
 							self.HAS_CALIBRATED = True
 							hand_is_moving_right = True
-							encourager.sayCalibSuccess()
+							self.encourager.sayCalibSuccess()
 
 							# TODO: adapt tolerance values to stored X/Y coordinates from calibration process?
 							
@@ -318,24 +336,17 @@ class Exercise1Game(object):
 
 			font = cv2.FONT_HERSHEY_SIMPLEX
 			cv2.putText(img,str(loop),(10,50), font, 1,(0,0,255),2)
-			cv2.putText(img,"Repetitions: " + str(encourager.repetitions),(10,80), font, 1,(0,0,255),2)
+			cv2.putText(img,"Repetitions: " + str(self.encourager.repetitions),(10,80), font, 1,(0,0,255),2)
 
 			# Show image windows
 			cv2.imshow('webcam', img)
 			out.write(img)
 			cv2.imshow('binary', img_binary)
 			cv2.imshow('contours', img_contours)
-			if cv2.waitKey(1) & 0xFF == ord('q') or encourager.repetitions == encourager.repetitions_limit:
+			if cv2.waitKey(1) & 0xFF == ord('q') or self.encourager.repetitions == self.encourager.repetitions_limit:
 				break
 		out.release()
 
-# simple thread wrapper for the Exercise1Game class
-class Exercise1Thread(Thread):
-	def __init__(self, argv):
-		Thread.__init__(self)
-		self.ex1Game = Exercise1Game(argv)
-	def run(self):
-		self.ex1Game.startGame()
 
 # ************************************************************************************
 # *********************************** MAIN PROGRAM ***********************************

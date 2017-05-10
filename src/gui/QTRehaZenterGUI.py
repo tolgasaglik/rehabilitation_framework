@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'QTRehaZenterGUI.ui'
+# Form implementation generated from reading ui file 'self.UI.ui'
 #
 # Created by: PyQt4 UI code generator 4.11.4
 #
@@ -8,6 +8,7 @@
 
 from PyQt4 import QtCore, QtGui
 import os,sys,inspect
+from threading import Thread
 # include parent "src" directory to sys.path, otherwise import won't work
 # (source: http://stackoverflow.com/questions/714063/importing-modules-from-parent-folder)
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -29,33 +30,33 @@ except AttributeError:
     def _translate(context, text, disambig):
         return QtGui.QApplication.translate(context, text, disambig)
 
-# The new Stream Object which replaces the default stream associated with sys.stdout
-# This object just puts data in a queue!
-#class WriteStream(object):
-#    def __init__(self, queue):
-#        self.queue = queue
-#
-#    def write(self, text):
-#        self.queue.put(text)
+class ROSConsoleWriter(QtCore.QThread):
+    def __init__(self, encourager_unit):
+	QtCore.QThread.__init__(self)
+	self.encourager_unit = encourager_unit
+	self.killThread = False
 
+    def run(self):
+	while not self.killThread:  
+		if hasattr(self.encourager_unit, 'exercise_node') == True and self.encourager_unit.exercise_node != None and self.encourager_unit.exercise_node.stdout != None:
+			for line in self.encourager_unit.exercise_node.stdout:
+				self.emit(QtCore.SIGNAL('appendToTextView'), line)
 
-# solution below taken from: http://stackoverflow.com/questions/8356336/how-to-capture-output-of-pythons-interpreter-and-show-in-a-text-widget
-class EmittingStream(QtCore.QObject):
-    textWritten = QtCore.pyqtSignal(str)
+class QTRehaZenterGUI(QtGui.QMainWindow):
 
-    def write(self, text):
-        self.textWritten.emit(str(text))
-
-class Ui_QTRehaZenter(object):
-    def setupUi(self, QTRehaZenter):
-        QTRehaZenter.setObjectName(_fromUtf8("QTRehaZenter"))
-        QTRehaZenter.resize(957, 1089)
+    def __init__(self):
+	QtGui.QWidget.__init__(self)
+	self.initUi()
+    # encourager unit takes care of ROS communications and counts repetitions
+    def initUi(self):
+        self.setObjectName(_fromUtf8("QTRehaZenter"))
+        self.resize(957, 1089)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(QTRehaZenter.sizePolicy().hasHeightForWidth())
-        QTRehaZenter.setSizePolicy(sizePolicy)
-        self.centralwidget = QtGui.QWidget(QTRehaZenter)
+        sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
+        self.setSizePolicy(sizePolicy)
+        self.centralwidget = QtGui.QWidget(self)
         self.centralwidget.setObjectName(_fromUtf8("centralwidget"))
         self.gridLayout = QtGui.QGridLayout(self.centralwidget)
         self.gridLayout.setObjectName(_fromUtf8("gridLayout"))
@@ -81,6 +82,7 @@ class Ui_QTRehaZenter(object):
         self.btnBegin.setSizePolicy(sizePolicy)
         self.btnBegin.setMinimumSize(QtCore.QSize(200, 120))
         self.btnBegin.setObjectName(_fromUtf8("btnBegin"))
+	self.btnBegin.setEnabled(False)
         self.horizontalLayout.addWidget(self.btnBegin)
         self.btnStop = QtGui.QPushButton(self.centralwidget)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
@@ -158,29 +160,29 @@ class Ui_QTRehaZenter(object):
         self.txtViewROSConsole.setMinimumSize(QtCore.QSize(751, 400))
         self.txtViewROSConsole.setObjectName(_fromUtf8("txtViewROSConsole"))
         self.gridLayout.addWidget(self.txtViewROSConsole, 9, 0, 1, 2)
-        QTRehaZenter.setCentralWidget(self.centralwidget)
-        self.menubar = QtGui.QMenuBar(QTRehaZenter)
+        self.setCentralWidget(self.centralwidget)
+        self.menubar = QtGui.QMenuBar(self)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 957, 35))
         self.menubar.setObjectName(_fromUtf8("menubar"))
         self.menuEdit = QtGui.QMenu(self.menubar)
         self.menuEdit.setObjectName(_fromUtf8("menuEdit"))
         self.menuHelp = QtGui.QMenu(self.menubar)
         self.menuHelp.setObjectName(_fromUtf8("menuHelp"))
-        QTRehaZenter.setMenuBar(self.menubar)
-        self.statusbar = QtGui.QStatusBar(QTRehaZenter)
+        self.setMenuBar(self.menubar)
+        self.statusbar = QtGui.QStatusBar(self)
         self.statusbar.setObjectName(_fromUtf8("statusbar"))
-        QTRehaZenter.setStatusBar(self.statusbar)
-        self.toolBar = QtGui.QToolBar(QTRehaZenter)
+        self.setStatusBar(self.statusbar)
+        self.toolBar = QtGui.QToolBar(self)
         self.toolBar.setObjectName(_fromUtf8("toolBar"))
-        QTRehaZenter.addToolBar(QtCore.Qt.TopToolBarArea, self.toolBar)
-        self.toolBar_2 = QtGui.QToolBar(QTRehaZenter)
+        self.addToolBar(QtCore.Qt.TopToolBarArea, self.toolBar)
+        self.toolBar_2 = QtGui.QToolBar(self)
         self.toolBar_2.setObjectName(_fromUtf8("toolBar_2"))
-        QTRehaZenter.addToolBar(QtCore.Qt.TopToolBarArea, self.toolBar_2)
-        self.actionSettings = QtGui.QAction(QTRehaZenter)
+        self.addToolBar(QtCore.Qt.TopToolBarArea, self.toolBar_2)
+        self.actionSettings = QtGui.QAction(self)
         self.actionSettings.setObjectName(_fromUtf8("actionSettings"))
-        self.actionAbout = QtGui.QAction(QTRehaZenter)
+        self.actionAbout = QtGui.QAction(self)
         self.actionAbout.setObjectName(_fromUtf8("actionAbout"))
-        self.actionQuit = QtGui.QAction(QTRehaZenter)
+        self.actionQuit = QtGui.QAction(self)
         self.actionQuit.setObjectName(_fromUtf8("actionQuit"))
         self.menuEdit.addAction(self.actionSettings)
         self.menuEdit.addSeparator()
@@ -189,8 +191,8 @@ class Ui_QTRehaZenter(object):
         self.menubar.addAction(self.menuEdit.menuAction())
         self.menubar.addAction(self.menuHelp.menuAction())
 
-        self.retranslateUi(QTRehaZenter)
-        QtCore.QMetaObject.connectSlotsByName(QTRehaZenter)
+        self.retranslateUi()
+        QtCore.QMetaObject.connectSlotsByName(self)
 
 	# connect functions to buttons
 	self.btnExercise3.clicked.connect(self.btnExercise3Clicked)
@@ -199,16 +201,19 @@ class Ui_QTRehaZenter(object):
 	self.btnExercise1.clicked.connect(self.btnExercise1Clicked)
 	self.btnBegin.clicked.connect(self.btnBeginClicked)
 	self.btnStop.clicked.connect(self.btnStopClicked)
+	self.actionQuit.triggered.connect(self.closeEvent)
 
-	#stdout = WriteStream(self)
-	#stdout.outputWritten.connect(self.handleROSOutput)
-	#sys.stdout = EmittingStream(textWritten=self.normalOutputWritten)
+	# spawn encourager unit instance (second parameter spawns ROS core, wm_voice_generator and sound_play nodes)
+	self.encourager_unit = Exercise1.EncouragerUnit(10,True)
 
-    #def normalOutputWritten(self, text):
-    #	self.txtViewROSConsole.appendPlainText(text)
+	# start ROS console writer thread and connect main thread to "worker" thread
+	self.rosConsoleWriter = ROSConsoleWriter(self.encourager_unit)
+	#self.rosConsoleWriter.daemon = True
+	self.connect(self.rosConsoleWriter, QtCore.SIGNAL("appendToTextView"), self.appendToTextView)
 
-    def retranslateUi(self, QTRehaZenter):
-        QTRehaZenter.setWindowTitle(_translate("QTRehaZenter", "MainWindow", None))
+
+    def retranslateUi(self):
+        self.setWindowTitle(_translate("QTRehaZenter", "MainWindow", None))
         self.btnBegin.setText(_translate("QTRehaZenter", "Begin!", None))
         self.btnStop.setText(_translate("QTRehaZenter", "Stop", None))
         self.lblROSConsole.setText(_translate("QTRehaZenter", "ROS Console output:", None))
@@ -224,9 +229,6 @@ class Ui_QTRehaZenter(object):
         self.actionAbout.setText(_translate("QTRehaZenter", "About...", None))
         self.actionQuit.setText(_translate("QTRehaZenter", "Quit", None))
 
-    def __del__(self):
-    	# Restore sys.stdout
-    	sys.stdout = sys.__stdout__
 
     # *******************************************************************************************
     # *************************  connector functions for the UI buttons  ************************
@@ -234,6 +236,7 @@ class Ui_QTRehaZenter(object):
     selectedButton = 0
     def btnExercise1Clicked(self):
 	# enable all other buttons except the one for exercise 1
+	self.btnBegin.setEnabled(True)
 	self.btnExercise1.setEnabled(False)
 	self.btnExercise2.setEnabled(True)
 	self.btnExercise3.setEnabled(True)
@@ -243,6 +246,7 @@ class Ui_QTRehaZenter(object):
 	
     def btnExercise2Clicked(self):
 	# enable all other buttons except the one for exercise 2
+	self.btnBegin.setEnabled(True)
 	self.btnExercise1.setEnabled(True)
 	self.btnExercise2.setEnabled(False)
 	self.btnExercise3.setEnabled(True)
@@ -252,6 +256,7 @@ class Ui_QTRehaZenter(object):
 
     def btnExercise3Clicked(self):
 	# enable all other buttons except the one for exercise 3
+	self.btnBegin.setEnabled(True)
 	self.btnExercise1.setEnabled(True)
 	self.btnExercise2.setEnabled(True)
 	self.btnExercise3.setEnabled(False)
@@ -261,6 +266,7 @@ class Ui_QTRehaZenter(object):
 
     def btnExercise4Clicked(self):
 	# enable all other buttons except the one for exercise 4
+	self.btnBegin.setEnabled(True)
 	self.btnExercise1.setEnabled(True)
 	self.btnExercise2.setEnabled(True)
 	self.btnExercise3.setEnabled(True)
@@ -278,13 +284,17 @@ class Ui_QTRehaZenter(object):
 	self.btnStop.setEnabled(True)
 	self.txtViewROSConsole.appendPlainText("Exercise " + str(self.selectedButton) + ": STARTED!")
 	if self.selectedButton == 1:
-		argv = ["--width", "640", "--height", "480", "--color", "yellow", "--calibrate"]
-		ex1game = Exercise1.Exercise1Thread(argv)
-		ex1game.start()
-
-	# TODO: run ROS launch file and print ROS log stuff on GUI
+		# spawn exercise subprocess
+		self.txtViewROSConsole.appendPlainText("******************** BEGIN EXERCISE ********************")
+		self.rosConsoleWriter.start()
+		self.encourager_unit.initExercise()
+		
 
     def btnStopClicked(self):
+	# stop exercise subprocess and kill ROS console worker thread
+	self.encourager_unit.stopExercise()
+	self.rosConsoleWriter.killthread = True
+
 	# enable all other buttons again
 	self.btnExercise1.setEnabled(True)
 	self.btnExercise2.setEnabled(True)
@@ -293,19 +303,34 @@ class Ui_QTRehaZenter(object):
 	self.btnBegin.setEnabled(True)
 	self.btnStop.setEnabled(False)
 	selectedButton = 0
+	self.txtViewROSConsole.appendPlainText("********************* END EXERCISE *********************")
 	self.txtViewROSConsole.appendPlainText("Exercise " + str(self.selectedButton) + ": STOPPED!")
 
-    def handleROSOutput(self, ):
-	self.txtViewROSConsole.appendPlainText()
+    def appendToTextView(self, line):
+	self.txtViewROSConsole.appendPlainText(line)
+
+    def closeEvent(self, event):
+        reply = QtGui.QMessageBox.question(self, 'Message',
+            "Are you sure that you want to quit?", QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
+
+        if reply == QtGui.QMessageBox.Yes:
+		self.encourager_unit.wm_voice_generator_node.terminate()
+		self.encourager_unit.wm_voice_generator_node.wait()
+		self.encourager_unit.soundplay_node.terminate()
+		self.encourager_unit.soundplay_node.wait()
+		self.encourager_unit.roscore_node.terminate()
+		self.encourager_unit.roscore_node.wait()
+		event.accept()
+        else:
+		event.ignore()
 
     # *******************************************************************************************
 
 if __name__ == "__main__":
     import sys
     app = QtGui.QApplication(sys.argv)
-    QTRehaZenter = QtGui.QMainWindow()
-    ui = Ui_QTRehaZenter()
-    ui.setupUi(QTRehaZenter)
-    QTRehaZenter.show()
+    myapp = QTRehaZenterGUI() 
+    app.processEvents()
+    myapp.show()
     sys.exit(app.exec_())
 
