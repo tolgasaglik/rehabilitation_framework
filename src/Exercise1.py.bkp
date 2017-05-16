@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import cv2
+import signal
 import numpy as np
 import sys
 import argparse
@@ -50,50 +51,50 @@ class EncouragerUnit(object):
 		sentences_file.close()
 
 	def initExercise(self, width=640, height=480):
-		self.exercise_node = Popen(['rosrun', 'reha_game', 'Exercise1.py', '--width', str(width), '--height', str(height)], bufsize=1, stdout=PIPE, stderr=STDOUT)
+		self.exercise_node = Popen(['rosrun', 'reha_game', 'Exercise1.py', '--width', str(width), '--height', str(height), '--calibrate'], stdout=PIPE, stderr=STDOUT)
 
 	def stopExercise(self):
-		self.exercise_node.terminate()
+		self.exercise_node.kill()
 		self.exercise_node.wait()
 
 	def incRepCounter(self):
 		self.repetitions += 1
 		self.pub.publish(str(self.repetitions))
-		rospy.loginfo("Current number of repetitions done: " +str(self.repetitions))
+		print "Current number of repetitions done: " +str(self.repetitions)
 		if self.repetitions == self.repetitions_limit/2:
 			self.pub.publish(self.sentences[0])
-			rospy.loginfo(self.sentences[0])
+			print self.sentences[0]
 		elif self.repetitions == self.repetitions_limit-1:
 			self.pub.publish(self.sentences[1])
-			rospy.loginfo(self.sentences[1])
+			print self.sentences[1]
 		elif self.repetitions == self.repetitions_limit:
 			self.pub.publish(self.sentences[2])
-			rospy.loginfo(self.sentences[2])
+			print self.sentences[2]
 
 	def sayCalibLeft(self):
 		sentence = "Now, move your arm to the left, and hold the position for 5 seconds."
 		self.pub.publish(sentence)
-		rospy.loginfo(sentence)
+		print sentence
 	def sayCalibRight(self):
 		sentence = "Please lay your arm strechted out on the table in front of you, and hold the position for 5 seconds."
 		self.pub.publish(sentence)
-		rospy.loginfo(sentence)
+		print sentence
 	def sayCalibSuccess(self):
-		sentence = "Callibration completed! You may begin your exercise now."
+		sentence = "Calibration completed! You may begin your exercise now."
 		self.pub.publish(sentence)
-		rospy.loginfo(sentence)
+		print sentence
 		
 
 
 # implementation of a custom timer thread that simply counts seconds up to some defined limit
 class Timer(Thread):
-	seconds = 0
-	def __init__(self, seconds):
+	def __init__(self, seconds=1):
 		self.seconds = seconds
 		Thread.__init__(self)
 	def run(self):
-		sleep(self.seconds)
-
+		temp = (self.seconds*1.0)/100.0
+		for i in xrange(1,100):
+			sleep(temp)
 
 
 
@@ -302,6 +303,7 @@ class Exercise1Game(object):
 				else:
 					if timer == None:
 						timer = Timer(self.CALIBRATION_DURATION_SECS)
+						timer.daemon = True
 						timer.start()
 						if hand_is_moving_right == True:
 							self.encourager.sayCalibRight()
@@ -346,6 +348,12 @@ class Exercise1Game(object):
 			if cv2.waitKey(1) & 0xFF == ord('q') or self.encourager.repetitions == self.encourager.repetitions_limit:
 				break
 		out.release()
+
+def signal_handler(signal, frame):
+        print('You pressed Ctrl+C!')
+        sys.exit(0)
+
+
 
 
 # ************************************************************************************
