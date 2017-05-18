@@ -8,6 +8,7 @@ import sys
 import argparse
 import roslib; roslib.load_manifest('reha_game')
 import rospy
+import roslaunch
 import rospkg
 from std_msgs.msg import String
 from os.path import expanduser
@@ -213,13 +214,33 @@ class EncouragerUnit(object):
 	sentences = []
 	ENC_SENT_FILELOC = "/config/encouragement_sentences.txt"
 
+	@property
+	def spawn_ros_nodes(self):
+		return self._spawn_ros_nodes
+	@spawn_ros_nodes.setter
+	def spawn_ros_nodes(self, spawn_ros_nodes):
+		if type(spawn_ros_nodes) is bool:
+			self._spawn_ros_nodes = spawn_ros_nodes
+		else:
+			raise ValueError("Argument spawn_ros_nodes is not boolean!")
+
 	def __init__(self, repetitions_limit=10, spawnRosNodes=False):
 		if spawnRosNodes:
 			# launch roscore, wm_voice_manager and soundplay
 			self.roscore_node = Popen(['roscore'], stdout=None, stderr=None)
-			sleep(0.2)
-			self.soundplay_node = Popen(['rosrun', 'sound_play', 'soundplay_node.py'], stdout=None, stderr=None)
-			self.wm_voice_generator_node = Popen(['rosrun', 'wm_voice_generator', 'wm_voice_component_short.py'], stdout=None, stderr=None)
+			sleep(0.5)
+			print "Launched roscore."
+			#self.soundplay_node = Popen(['rosrun', 'sound_play', 'soundplay_node.py'], stdout=None, stderr=None)
+			#self.wm_voice_generator_node = Popen(['rosrun', 'wm_voice_generator', 'wm_voice_component_short.py'], stdout=None, stderr=None)
+			soundplay = roslaunch.core.Node("sound_play", "soundplay_node.py")
+			wm_voice_generator = roslaunch.core.Node("wm_voice_generator", "wm_voice_component_short.py")
+			launch = roslaunch.scriptapi.ROSLaunch()
+			launch.start()
+			self.soundplay_node = launch.launch(soundplay)
+			print "Launched soundplay."
+			self.wm_voice_generator_node = launch.launch(wm_voice_generator)
+			print "Launched wm_voice_generator"
+		self.spawn_ros_nodes = spawnRosNodes
 		rospy.init_node('reha_game')
 		self.pub = rospy.Publisher('/robot/voice', String)
 		self.load_sentences()
@@ -380,10 +401,19 @@ class Exercise:
 			# display images and quit loop if "q"-key was pressed
 			cv2.imshow("Original image", self._video_reader.img_original)
 			cv2.imshow("Detected blobs", self._video_reader.img_modified)
-			if cv2.waitKey(1) & 0xFF == ord('q') or not self._video_reader.is_alive():
-				self._video_reader.set_kill_thread()
+			if cv2.waitKey(1) & 0xFF == ord('q'):
 				break
+		self._video_reader.set_kill_thread()
+		print "Waiting for video reader to finish."
+		self._video_reader.join()
+		print "Video reader terminated!"
 		cv2.destroyAllWindows()
+
+	def stop_game(self):
+		if self._encourager.spawn_ros_nodes:
+			self._encourager.wm_voice_generator_node.stop()
+			self._encourager.soundplay_node.stop()
+			self._encourager.roscore_node.terminate()
 
 	# method that processes the arguments given as a parameter
 	def process_args(self, argv):
@@ -396,8 +426,10 @@ class Exercise:
 			parser.add_argument('--color', type=str, dest="color", help='the color of the object that should be tracked (default=yellow)')
 			parser.add_argument('--spawn_nodes', action="store_true", dest="spawn_nodes", help='pass this argument in order to launch all the needed ROS nodes, if they aren\'t running already')
 			args = parser.parse_args(argv)
-			self._video_reader.camera_resolution = (args.width, args.height)
-			self._video_reader.color = string_to_color(args.color)
+			if args.width != None and args.height != None:
+				self._video_reader.camera_resolution = (args.width, args.height)
+			if args.color != None:
+				self._video_reader.color = string_to_color(args.color)
 			if args.path_to_video != None:
 				self._video_reader.path_to_video = args.path_to_video
 			else:
@@ -479,8 +511,11 @@ class SimpleMotionExercise(Exercise):
 			# display images and quit loop if "q"-key was pressed
 			cv2.imshow("Original image", self._video_reader.img_original)
 			cv2.imshow("Detected blobs", self._video_reader.img_modified)
-			if cv2.waitKey(1) & 0xFF == ord('q') or not self._video_reader.is_alive():
-				break
+			if cv2.waitKey(1) & 0xFF == ord('q'):
+				self._video_reader.set_kill_thread()
+				self._video_reader.join()
+				cv2.destroyAllWindows()
+				raise Exception("Video reader terminated before calibration process finished! Aborting...")
 		self._encourager.say("Calibration completed! You may start your exercise now!")
 
 #class ConesExercise(Exercise)
@@ -494,6 +529,12 @@ if __name__ == '__main__':
 	# use the "rospy.myargv" argument vector instead of the built-in "sys.argv" to avoid problems with ROS argument re-mapping
 	# (reason: https://groups.google.com/a/rethinkrobotics.com/forum/#!topic/brr-users/ErXVWhRmtNA)
 	motion_ex = SimpleMotionExercise(argv=rospy.myargv()[1:])
-	motion_ex.calibrate()
+	try:
+		motion_ex.calibrate()
+	except Exception:
+		# stop all ROS nodes and exit
+		motion_ex.stop_game()
+		sys.exit()
 	motion_ex.start_game()
+	motion_ex.stop_game()
 	sys.exit()

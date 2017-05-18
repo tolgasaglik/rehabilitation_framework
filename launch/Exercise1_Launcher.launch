@@ -1,5 +1,5 @@
 <launch>
 	<node pkg="sound_play" type="soundplay_node.py" name="sound_play" />
 	<node pkg="wm_voice_generator" type="wm_voice_component_short.py" name="wm_voice_generator" />
-	<node pkg="reha_game" type="Exercise1.py" name="reha_game" args="--width 640 --height 480 --color yellow --calibrate" output="screen" />
+	<node pkg="reha_game" type="Exercises.py" name="reha_game" args="--width 640 --height 480 --color yellow" output="screen" />
 </launch>
