@@ -60,18 +60,18 @@ def get_hsv_thresholds(color):
 def process_args(argv):
 	# define arguments to parse from the argument vector
 	parser = argparse.ArgumentParser(description='Reads video footage from a camera or a video file, and performs the Rehazenter exercise on it.')
-	parser.add_argument('--width', type=int, dest="width", help='width of the camera window')
-	parser.add_argument('--height', type=int, dest="height", help='height of the camera window')
-	parser.add_argument('--path-to-video', type=str, dest="path_to_video", help='file path to the video file (default: webcam)')
+	parser.add_argument('--width', type=int, default=640, dest="width", help='width of the camera window')
+	parser.add_argument('--height', type=int, default=480, dest="height", help='height of the camera window')
+	parser.add_argument('--path-to-video', type=str, default="", dest="path_to_video", help='file path to the video file (default: webcam)')
 	#parser.add_argument('--path-to-samples-folder', '-f', type=str, dest="arg_path_to_samples_folder", help='path to the folder where the object\'s image samples are stored')
-	parser.add_argument('--color', type=str, dest="color", help='the color of the object that should be tracked (default=yellow, supported=yellow,black,blue)')
+	parser.add_argument('--color', type=str, default="yellow", dest="color", help='the color of the object that should be tracked (default=yellow, supported=yellow,black,blue)')
 	parser.add_argument('--spawn_nodes', action="store_true", dest="spawn_nodes", help='pass this argument in order to launch all the needed ROS nodes, if they aren\'t running already')
-	parser.add_argument('--motion_type', type=int, dest="motion_type", help='if specified value is valid, then it creates a simple motion exercise of the specified motion type (0=unused, 1=Flexion, 2=Abduction)')
-	parser.add_argument('--rotation_type', type=int, dest="rotation_type", help='if specified value is valid, then it creates a rotation exercise of the specified rotation type (0=unused, 1=Internal, 2=External)')
-	parser.add_argument('--number_of_repetitions', type=int, dest="number_of_repetitions", help='amount of repetitions to perform until completion of the exercise session')
-	parser.add_argument('--time_limit', type=int, dest="time_limit", help='time limit that the patient has to complete his exercise')
-	parser.add_argument('--limb', type=int, dest="limb", help='limb of the patient to be used for the exercise')
-	parser.add_argument('--calibration_duration', type=int, dest="calibration_duration", help='duration (in seconds) of the calibration procedure for the exercise')
+	parser.add_argument('--motion_type', type=int, default="1", dest="motion_type", help='if specified value is valid, then it creates a simple motion exercise of the specified motion type (0=unused, 1=Flexion, 2=Abduction)')
+	parser.add_argument('--rotation_type', type=int, default="1", dest="rotation_type", help='if specified value is valid, then it creates a rotation exercise of the specified rotation type (0=unused, 1=Internal, 2=External)')
+	parser.add_argument('--number_of_repetitions', type=int, default="10", dest="number_of_repetitions", help='amount of repetitions to perform until completion of the exercise session')
+	parser.add_argument('--time_limit', type=int, default="0", dest="time_limit", help='time limit that the patient has to complete his exercise')
+	parser.add_argument('--limb', type=int, default="1", dest="limb", help='limb of the patient to be used for the exercise')
+	parser.add_argument('--calibration_duration', type=int, default="10", dest="calibration_duration", help='duration (in seconds) of the calibration procedure for the exercise')
 	args = parser.parse_args(argv)
 
 	# create exercise with all passed arguments and return it
@@ -245,10 +245,18 @@ class VideoReader(Thread):
 			return self._frame
 
 class EncouragerUnit(object):
-	repetitions = 0
-	repetitions_limit = 0
-	sentences = []
+	_repetitions = 0
+	_repetitions_limit = 0
+	_sentences = []
 	ENC_SENT_FILELOC = "/config/encouragement_sentences.txt"
+
+	@property
+	def repetitions(self):
+		return self._repetitions
+
+	@property
+	def repetitions_limit(self):
+		return self._repetitions_limit
 
 	@property
 	def spawn_ros_nodes(self):
@@ -261,21 +269,21 @@ class EncouragerUnit(object):
 			raise ValueError("Argument spawn_ros_nodes is not boolean!")
 
 	def __init__(self, repetitions_limit=10, spawnRosNodes=False):
-		self.spawn_ros_nodes = spawnRosNodes
+		self._spawn_ros_nodes = spawnRosNodes
 		self._ros_nodes_ready = False
 		if self.spawn_ros_nodes:
 			self.start_ros_nodes()
 		rospy.init_node('reha_game')
-		self.pub = rospy.Publisher('/robot/voice', String)
+		self._pub = rospy.Publisher('/robot/voice', String)
 		self.load_sentences()
-		self.repetitions_limit = repetitions_limit
+		self._repetitions_limit = repetitions_limit
 
 	def load_sentences(self):
 		# retrieve path to reha_game ROS package and load sentences file
 		rospack = rospkg.RosPack()
 		reha_game_pkg_path = rospack.get_path('reha_game')
 		sentences_file = open(reha_game_pkg_path + self.ENC_SENT_FILELOC, "r")
-		self.sentences = sentences_file.readlines()
+		self._sentences = sentences_file.readlines()
 		sentences_file.close()
 
 	def start_ros_nodes(self):
@@ -301,28 +309,28 @@ class EncouragerUnit(object):
 			if self._soundplay_node.is_alive():
 				self._soundplay_node.stop()
 			if self._wm_voice_generator_node.is_alive():
-				self._wm_voice_generator.stop()
-			if self.roscore_node != None :
+				self._wm_voice_generator_node.stop()
+			if self._roscore_node != None :
 				self._roscore_node.terminate()
 				self._roscore_node.wait()
 			self._ros_nodes_ready = False
 
 	def inc_repetitions_counter(self):
-		self.repetitions += 1
-		self.pub.publish(str(self.repetitions))
-		print "Current number of repetitions done: " +str(self.repetitions)
-		if self.repetitions == self.repetitions_limit/2:
-			self.pub.publish(self.sentences[0])
-			print self.sentences[0]
-		elif self.repetitions == self.repetitions_limit-1:
-			self.pub.publish(self.sentences[1])
-			print self.sentences[1]
-		elif self.repetitions == self.repetitions_limit:
-			self.pub.publish(self.sentences[2])
-			print self.sentences[2]
+		self._repetitions += 1
+		self._pub.publish(str(self.repetitions))
+		print "Current number of repetitions done: " +str(self._repetitions)
+		if self._repetitions == self._repetitions_limit/2:
+			self._pub.publish(self._sentences[0])
+			print self._sentences[0]
+		elif self._repetitions == self._repetitions_limit-1:
+			self._pub.publish(self._sentences[1])
+			print self._sentences[1]
+		elif self._repetitions == self._repetitions_limit:
+			self._pub.publish(self._sentences[2])
+			print self._sentences[2]
 
 	def say(self, sentence):
-		self.pub.publish(sentence)
+		self._pub.publish(sentence)
 		print "The robot says: \"" + sentence + "\""
 
 
@@ -440,7 +448,11 @@ class Exercise:
 		# Main loop
 		index=0
 		self._encourager.say("You may begin your exercise now!")
-		while self._encourager.repetitions != self._encourager.repetitions_limit:
+		#timer = None
+		if self.time_limit > 0:
+			timer = Timer(self.time_limit)
+			timer.start()
+		while self._encourager.repetitions < self._encourager.repetitions_limit or (self.time_limit > 0 and timer.is_alive()):
 			# check if hand movement thresholds have been reached and count repetitions accordingly
 			if self._video_reader.center != None :
 				if abs(self._video_reader.center[0]-(self._calibration_points[index])[0]) < self._tolerance_x and abs(self._video_reader.center[1]-(self._calibration_points[index])[1]) < self._tolerance_y :
@@ -452,13 +464,25 @@ class Exercise:
 			# display images and quit loop if "q"-key was pressed
 			cv2.imshow("Original image", self._video_reader.img_original)
 			cv2.imshow("Detected blobs", self._video_reader.img_modified)
+
+			# check termination conditions
 			if cv2.waitKey(1) & 0xFF == ord('q'):
+				self._video_reader.set_kill_thread()
+				self._video_reader.join()
 				break
-		self._video_reader.set_kill_thread()
-		print "Waiting for video reader to finish."
-		self._video_reader.join()
-		print "Video reader terminated!"
+			if not self._video_reader.is_alive():
+				if self.time_limit > 0 and timer.is_alive():
+					timer.kill_timer()
+					timer.join()
+					self._encourager.say("Time is over!")
+					sleep(1)
+					self._encourager.say("You did " + str(self._encourager.repetitions) + " total repetitions.")
+					# TODO: play random congratulation sentence depending on performance
+					timer.kill_timer()
+					timer.join()
+				break
 		cv2.destroyAllWindows()
+		print "Video reader terminated!"
 
 	def stop_game(self):
 		if self._encourager.spawn_ros_nodes:

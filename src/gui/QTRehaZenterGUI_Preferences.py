@@ -28,17 +28,19 @@ class UIPreferencesWidget(QtGui.QWidget):
         self.setupUi()
 	self._main_window_ref = main_window_ref
 
-        #self._color = main_window_ref.exercise_color
-        #self._exercise_type = main_window_ref.exercise_type
-        #self._limb = main_window_ref.exercise_limb
-        #self._rotation_type = main_window_ref.exercise_rotation_type
-        #self._motion_type = main_window_ref.exercise_motion_type
+        # store original data from main window as a backup
+        self._original_width = main_window_ref.exercise_width
+        self._original_height = main_window_ref.exercise_height
+        self._original_nbr_repetitions= main_window_ref.exercise_number_of_repetitions
+        self._original_time_limit = main_window_ref.exercise_time_limit
+        self._original_color = main_window_ref.exercise_color
 
-        # initialize widgets with correct data
-        self.spnWidth.setValue(main_window_ref.exercise_width)
-        self.spnHeight.setValue(main_window_ref.exercise_height)
-        self.spnNbrRepetitions.setValue(main_window_ref.exercise_number_of_repetitions)
-        self.spnTimeLimit.setValue(main_window_ref.exercise_time_limit)
+	# initialize value of widgets
+        self.spnWidth.setValue(self._original_width)
+        self.spnHeight.setValue(self._original_height)
+        self.spnNbrRepetitions.setValue(self._original_nbr_repetitions)
+        self.spnTimeLimit.setValue(self._original_time_limit)
+	self.cmbColor.setCurrentIndex(self.cmbColor.findText(self._original_color))
 
     def setupUi(self):
         self.setObjectName(_fromUtf8("preferencesWidget"))
@@ -205,7 +207,19 @@ class UIPreferencesWidget(QtGui.QWidget):
 
     def btnSaveChangesClicked(self):
         self._main_window_ref.updateExerciseParams(self.spnWidth.value(), self.spnHeight.value(), str(self.cmbColor.currentText()), self.spnNbrRepetitions.value(), self.spnTimeLimit.value())
-        self.close()
+        
+        self._original_width = self.spnWidth.value()
+        self._original_height = self.spnHeight.value()
+        self._original_nbr_repetitions = self.spnNbrRepetitions.value()
+        self._original_time_limit = self.spnTimeLimit.value()
+        self._original_color = str(self.cmbColor.currentText())
+	self.close()
 
     def btnCancelClicked(self):
+	# replace widget values with the original data
+        self.spnWidth.setValue(self._original_width)
+        self.spnHeight.setValue(self._original_height)
+        self.spnNbrRepetitions.setValue(self._original_nbr_repetitions)
+        self.spnTimeLimit.setValue(self._original_time_limit)
+        self.cmbColor.setCurrentIndex(self.cmbColor.findText(self._original_color))
         self.close()
