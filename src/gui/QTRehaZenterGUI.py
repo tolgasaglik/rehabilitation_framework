@@ -7,14 +7,22 @@
 # WARNING! All changes made in this file will be lost!
 
 from PyQt4 import QtCore, QtGui
+from PyQt4.QtCore import QThread
+from subprocess import Popen,PIPE
+from PyQt4.QtGui import QWidget
 import os,sys,inspect
 from threading import Thread
+from time import sleep
+import roslaunch
+import rospy
 # include parent "src" directory to sys.path, otherwise import won't work
 # (source: http://stackoverflow.com/questions/714063/importing-modules-from-parent-folder)
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0,parentdir) 
-import Exercise1
+import Exercises
+from Exercises import Color,Limb,RotationType,MotionType
+import QTRehaZenterGUI_Preferences
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -30,23 +38,22 @@ except AttributeError:
     def _translate(context, text, disambig):
         return QtGui.QApplication.translate(context, text, disambig)
 
-class ROSConsoleWriter(QtCore.QThread):
-    def __init__(self, encourager_unit):
-	QtCore.QThread.__init__(self)
-	self.encourager_unit = encourager_unit
-	self.killThread = False
-
-    def run(self):
-	while not self.killThread:  
-		if hasattr(self.encourager_unit, 'exercise_node') == True and self.encourager_unit.exercise_node != None and self.encourager_unit.exercise_node.stdout != None:
-			for line in self.encourager_unit.exercise_node.stdout:
-				self.emit(QtCore.SIGNAL('appendToTextView'), line)
 
 class QTRehaZenterGUI(QtGui.QMainWindow):
-
     def __init__(self):
 	QtGui.QWidget.__init__(self)
 	self.initUi()
+
+	# initialize exercise parameters
+	self.exercise_width = 640
+        self.exercise_height = 480
+        self.exercise_color = "yellow"
+        self.exercise_number_of_repetitions = 10
+        self.exercise_time_limit = 0
+
+	# initialize preferences widget
+	self.preferences = QTRehaZenterGUI_Preferences.UIPreferencesWidget(self)
+
     # encourager unit takes care of ROS communications and counts repetitions
     def initUi(self):
         self.setObjectName(_fromUtf8("QTRehaZenter"))
@@ -104,25 +111,25 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.lblROSConsole.setSizePolicy(sizePolicy)
         self.lblROSConsole.setObjectName(_fromUtf8("lblROSConsole"))
         self.gridLayout.addWidget(self.lblROSConsole, 8, 0, 1, 1)
-        self.btnExercise4 = QtGui.QPushButton(self.centralwidget)
+        self.btnExternalRotationExercise = QtGui.QPushButton(self.centralwidget)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.btnExercise4.sizePolicy().hasHeightForWidth())
-        self.btnExercise4.setSizePolicy(sizePolicy)
-        self.btnExercise4.setMinimumSize(QtCore.QSize(0, 200))
-        self.btnExercise4.setObjectName(_fromUtf8("btnExercise4"))
-        self.gridLayout.addWidget(self.btnExercise4, 3, 1, 1, 1)
-        self.btnExercise2 = QtGui.QPushButton(self.centralwidget)
-        self.btnExercise2.setEnabled(True)
+        sizePolicy.setHeightForWidth(self.btnExternalRotationExercise.sizePolicy().hasHeightForWidth())
+        self.btnExternalRotationExercise.setSizePolicy(sizePolicy)
+        self.btnExternalRotationExercise.setMinimumSize(QtCore.QSize(0, 200))
+        self.btnExternalRotationExercise.setObjectName(_fromUtf8("btnExternalRotationExercise"))
+        self.gridLayout.addWidget(self.btnExternalRotationExercise, 3, 1, 1, 1)
+        self.btnAbductionMotionExercise = QtGui.QPushButton(self.centralwidget)
+        self.btnAbductionMotionExercise.setEnabled(True)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.btnExercise2.sizePolicy().hasHeightForWidth())
-        self.btnExercise2.setSizePolicy(sizePolicy)
-        self.btnExercise2.setMinimumSize(QtCore.QSize(0, 200))
-        self.btnExercise2.setObjectName(_fromUtf8("btnExercise2"))
-        self.gridLayout.addWidget(self.btnExercise2, 2, 1, 1, 1)
+        sizePolicy.setHeightForWidth(self.btnAbductionMotionExercise.sizePolicy().hasHeightForWidth())
+        self.btnAbductionMotionExercise.setSizePolicy(sizePolicy)
+        self.btnAbductionMotionExercise.setMinimumSize(QtCore.QSize(0, 200))
+        self.btnAbductionMotionExercise.setObjectName(_fromUtf8("btnAbductionMotionExercise"))
+        self.gridLayout.addWidget(self.btnAbductionMotionExercise, 2, 1, 1, 1)
         self.line_2 = QtGui.QFrame(self.centralwidget)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Maximum)
         sizePolicy.setHorizontalStretch(0)
@@ -133,24 +140,24 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.line_2.setFrameShadow(QtGui.QFrame.Sunken)
         self.line_2.setObjectName(_fromUtf8("line_2"))
         self.gridLayout.addWidget(self.line_2, 5, 0, 1, 2)
-        self.btnExercise3 = QtGui.QPushButton(self.centralwidget)
+        self.btnInternalRotationExercise = QtGui.QPushButton(self.centralwidget)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.btnExercise3.sizePolicy().hasHeightForWidth())
-        self.btnExercise3.setSizePolicy(sizePolicy)
-        self.btnExercise3.setMinimumSize(QtCore.QSize(0, 200))
-        self.btnExercise3.setObjectName(_fromUtf8("btnExercise3"))
-        self.gridLayout.addWidget(self.btnExercise3, 3, 0, 1, 1)
-        self.btnExercise1 = QtGui.QPushButton(self.centralwidget)
+        sizePolicy.setHeightForWidth(self.btnInternalRotationExercise.sizePolicy().hasHeightForWidth())
+        self.btnInternalRotationExercise.setSizePolicy(sizePolicy)
+        self.btnInternalRotationExercise.setMinimumSize(QtCore.QSize(0, 200))
+        self.btnInternalRotationExercise.setObjectName(_fromUtf8("btnInternalRotationExercise"))
+        self.gridLayout.addWidget(self.btnInternalRotationExercise, 3, 0, 1, 1)
+        self.btnFlexionMotionExercise = QtGui.QPushButton(self.centralwidget)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.MinimumExpanding, QtGui.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.btnExercise1.sizePolicy().hasHeightForWidth())
-        self.btnExercise1.setSizePolicy(sizePolicy)
-        self.btnExercise1.setMinimumSize(QtCore.QSize(0, 200))
-        self.btnExercise1.setObjectName(_fromUtf8("btnExercise1"))
-        self.gridLayout.addWidget(self.btnExercise1, 2, 0, 1, 1)
+        sizePolicy.setHeightForWidth(self.btnFlexionMotionExercise.sizePolicy().hasHeightForWidth())
+        self.btnFlexionMotionExercise.setSizePolicy(sizePolicy)
+        self.btnFlexionMotionExercise.setMinimumSize(QtCore.QSize(0, 200))
+        self.btnFlexionMotionExercise.setObjectName(_fromUtf8("btnFlexionMotionExercise"))
+        self.gridLayout.addWidget(self.btnFlexionMotionExercise, 2, 0, 1, 1)
         self.txtViewROSConsole = QtGui.QPlainTextEdit(self.centralwidget)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
         sizePolicy.setHorizontalStretch(0)
@@ -178,13 +185,13 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.toolBar_2 = QtGui.QToolBar(self)
         self.toolBar_2.setObjectName(_fromUtf8("toolBar_2"))
         self.addToolBar(QtCore.Qt.TopToolBarArea, self.toolBar_2)
-        self.actionSettings = QtGui.QAction(self)
-        self.actionSettings.setObjectName(_fromUtf8("actionSettings"))
+        self.actionPreferences = QtGui.QAction(self)
+        self.actionPreferences.setObjectName(_fromUtf8("actionPreferences"))
         self.actionAbout = QtGui.QAction(self)
         self.actionAbout.setObjectName(_fromUtf8("actionAbout"))
         self.actionQuit = QtGui.QAction(self)
         self.actionQuit.setObjectName(_fromUtf8("actionQuit"))
-        self.menuEdit.addAction(self.actionSettings)
+        self.menuEdit.addAction(self.actionPreferences)
         self.menuEdit.addSeparator()
         self.menuEdit.addAction(self.actionQuit)
         self.menuHelp.addAction(self.actionAbout)
@@ -195,37 +202,30 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         QtCore.QMetaObject.connectSlotsByName(self)
 
 	# connect functions to buttons
-	self.btnExercise3.clicked.connect(self.btnExercise3Clicked)
-	self.btnExercise4.clicked.connect(self.btnExercise4Clicked)
-	self.btnExercise2.clicked.connect(self.btnExercise2Clicked)
-	self.btnExercise1.clicked.connect(self.btnExercise1Clicked)
+	self.btnInternalRotationExercise.clicked.connect(self.btnInternalRotationExerciseClicked)
+	self.btnExternalRotationExercise.clicked.connect(self.btnExternalRotationExerciseClicked)
+	self.btnAbductionMotionExercise.clicked.connect(self.btnAbductionMotionExerciseClicked)
+	self.btnFlexionMotionExercise.clicked.connect(self.btnFlexionMotionExerciseClicked)
 	self.btnBegin.clicked.connect(self.btnBeginClicked)
 	self.btnStop.clicked.connect(self.btnStopClicked)
 	self.actionQuit.triggered.connect(self.closeEvent)
-
-	# spawn encourager unit instance (second parameter spawns ROS core, wm_voice_generator and sound_play nodes)
-	self.encourager_unit = Exercise1.EncouragerUnit(10,True)
-
-	# start ROS console writer thread and connect main thread to "worker" thread
-	self.rosConsoleWriter = ROSConsoleWriter(self.encourager_unit)
-	#self.rosConsoleWriter.daemon = True
-	self.connect(self.rosConsoleWriter, QtCore.SIGNAL("appendToTextView"), self.appendToTextView)
+	self.actionPreferences.triggered.connect(self.openPreferences)
 
 
     def retranslateUi(self):
-        self.setWindowTitle(_translate("QTRehaZenter", "MainWindow", None))
+        self.setWindowTitle(_translate("QTRehaZenter", "QT RehaZenter Exercise Assistant", None))
         self.btnBegin.setText(_translate("QTRehaZenter", "Begin!", None))
         self.btnStop.setText(_translate("QTRehaZenter", "Stop", None))
-        self.lblROSConsole.setText(_translate("QTRehaZenter", "ROS Console output:", None))
-        self.btnExercise4.setText(_translate("QTRehaZenter", "Exercise 4", None))
-        self.btnExercise2.setText(_translate("QTRehaZenter", "Exercise 2", None))
-        self.btnExercise3.setText(_translate("QTRehaZenter", "Exercise 3", None))
-        self.btnExercise1.setText(_translate("QTRehaZenter", "Exercise 1", None))
+        self.lblROSConsole.setText(_translate("QTRehaZenter", "Robot log:", None))
+        self.btnExternalRotationExercise.setText(_translate("QTRehaZenter", "External rotation exercise", None))
+        self.btnAbductionMotionExercise.setText(_translate("QTRehaZenter", "Abduction motion exercise", None))
+        self.btnInternalRotationExercise.setText(_translate("QTRehaZenter", "Internal rotation exercise", None))
+        self.btnFlexionMotionExercise.setText(_translate("QTRehaZenter", "Flexion motion exercise", None))
         self.menuEdit.setTitle(_translate("QTRehaZenter", "File", None))
         self.menuHelp.setTitle(_translate("QTRehaZenter", "Help", None))
         self.toolBar.setWindowTitle(_translate("QTRehaZenter", "toolBar", None))
         self.toolBar_2.setWindowTitle(_translate("QTRehaZenter", "toolBar_2", None))
-        self.actionSettings.setText(_translate("QTRehaZenter", "Preferences", None))
+        self.actionPreferences.setText(_translate("QTRehaZenter", "Preferences", None))
         self.actionAbout.setText(_translate("QTRehaZenter", "About...", None))
         self.actionQuit.setText(_translate("QTRehaZenter", "Quit", None))
 
@@ -233,93 +233,115 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
     # *******************************************************************************************
     # *************************  connector functions for the UI buttons  ************************
     # *******************************************************************************************
-    selectedButton = 0
-    def btnExercise1Clicked(self):
+    def btnFlexionMotionExerciseClicked(self):
 	# enable all other buttons except the one for exercise 1
 	self.btnBegin.setEnabled(True)
-	self.btnExercise1.setEnabled(False)
-	self.btnExercise2.setEnabled(True)
-	self.btnExercise3.setEnabled(True)
-	self.btnExercise4.setEnabled(True)
-	self.selectedButton = 1
-	self.txtViewROSConsole.appendPlainText("Exercise 1 selected.")
+	self.btnFlexionMotionExercise.setEnabled(False)
+	self.btnAbductionMotionExercise.setEnabled(True)
+	self.btnInternalRotationExercise.setEnabled(True)
+	self.btnExternalRotationExercise.setEnabled(True)
+	self.txtViewROSConsole.appendPlainText("Flexion motion exercise selected.")
 	
-    def btnExercise2Clicked(self):
+    def btnAbductionMotionExerciseClicked(self):
 	# enable all other buttons except the one for exercise 2
 	self.btnBegin.setEnabled(True)
-	self.btnExercise1.setEnabled(True)
-	self.btnExercise2.setEnabled(False)
-	self.btnExercise3.setEnabled(True)
-	self.btnExercise4.setEnabled(True)
-	self.selectedButton = 2
-	self.txtViewROSConsole.appendPlainText("Exercise 2 selected.")
+	self.btnFlexionMotionExercise.setEnabled(True)
+	self.btnAbductionMotionExercise.setEnabled(False)
+	self.btnInternalRotationExercise.setEnabled(True)
+	self.btnExternalRotationExercise.setEnabled(True)
+	self.txtViewROSConsole.appendPlainText("Abduction motion exercise selected.")
 
-    def btnExercise3Clicked(self):
+    def btnInternalRotationExerciseClicked(self):
 	# enable all other buttons except the one for exercise 3
 	self.btnBegin.setEnabled(True)
-	self.btnExercise1.setEnabled(True)
-	self.btnExercise2.setEnabled(True)
-	self.btnExercise3.setEnabled(False)
-	self.btnExercise4.setEnabled(True)
-	self.selectedButton = 3
-	self.txtViewROSConsole.appendPlainText("Exercise 3 selected.")
+	self.btnFlexionMotionExercise.setEnabled(True)
+	self.btnAbductionMotionExercise.setEnabled(True)
+	self.btnInternalRotationExercise.setEnabled(False)
+	self.btnExternalRotationExercise.setEnabled(True)
+	self.txtViewROSConsole.appendPlainText("Internal rotation exercise selected.")
 
-    def btnExercise4Clicked(self):
+    def btnExternalRotationExerciseClicked(self):
 	# enable all other buttons except the one for exercise 4
 	self.btnBegin.setEnabled(True)
-	self.btnExercise1.setEnabled(True)
-	self.btnExercise2.setEnabled(True)
-	self.btnExercise3.setEnabled(True)
-	self.btnExercise4.setEnabled(False)
-	self.selectedButton = 4
-	self.txtViewROSConsole.appendPlainText("Exercise 4 selected.")
+	self.btnFlexionMotionExercise.setEnabled(True)
+	self.btnAbductionMotionExercise.setEnabled(True)
+	self.btnInternalRotationExercise.setEnabled(True)
+	self.btnExternalRotationExercise.setEnabled(False)
+	self.txtViewROSConsole.appendPlainText("External rotation exercise selected.")
 
     def btnBeginClicked(self):
 	# disable all other buttons while the chosen exercise is running
-	self.btnExercise1.setEnabled(False)
-	self.btnExercise2.setEnabled(False)
-	self.btnExercise3.setEnabled(False)
-	self.btnExercise4.setEnabled(False)
+	self.btnFlexionMotionExercise.setEnabled(False)
+	self.btnAbductionMotionExercise.setEnabled(False)
+	self.btnInternalRotationExercise.setEnabled(False)
+	self.btnExternalRotationExercise.setEnabled(False)
 	self.btnBegin.setEnabled(False)
 	self.btnStop.setEnabled(True)
-	self.txtViewROSConsole.appendPlainText("Exercise " + str(self.selectedButton) + ": STARTED!")
-	if self.selectedButton == 1:
-		# spawn exercise subprocess
-		self.txtViewROSConsole.appendPlainText("******************** BEGIN EXERCISE ********************")
-		self.rosConsoleWriter.start()
-		self.encourager_unit.initExercise()
+
+	# spawn exercise subprocess
+	self.txtViewROSConsole.appendPlainText("******************** BEGIN EXERCISE ********************")
+        #uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
+        #roslaunch.configure_logging(uuid)
+	launch_params = ['roslaunch', 'reha_game', 'Exercise_Launcher.launch']
+	launch_params.extend(('width:='+str(self.exercise_width), 'height:='+str(self.exercise_height), 'color:='+self.exercise_color, 'number_of_repetitions:='+str(self.exercise_number_of_repetitions), "time_limit:="+str(self.exercise_time_limit)))
+	#if self.btnFlexionMotionExercise.isChecked():
+        #self.launcher = roslaunch.parent.ROSLaunchParent(uuid, ["./../../launch/Exercise_Launcher.launch"])
+	self.exercise_process = Popen(launch_params, stdin=PIPE)
 		
+	# second approach to running exercise (not working atm, needs callback)
+	#config = roslaunch.launch.ROSLaunchConfig()
+	#config.add_roslaunch_file("./../../launch/Exercise_Launcher.launch")
+	#self.launcher = roslaunch.launch.ROSLaunchRunner(uuid, config)
+
+        #elif self.btnAbductionMotionExercise.isChecked():
+        #        # TODO: implement start_game() of this exercise and create launch file
+        #        self.launcher = roslaunch.parent.ROSLaunchParent(uuid, ["./../../launch/Exercise_Launcher.launch"])
+        #elif self.btnInternalRotationExercise.isChecked():
+        #        # TODO: implement start_game() of this exercise and create launch file
+        #        self.launcher = roslaunch.parent.ROSLaunchParent(uuid, ["./../../launch/Exercise_Launcher.launch"])
+        #else:
+        #        # TODO: implement start_game() of this exercise and create launch file
+        #        self.launcher = roslaunch.parent.ROSLaunchParent(uuid, ["./../../launch/Exercise_Launcher.launch"])
+        #self.launcher.start()
 
     def btnStopClicked(self):
 	# stop exercise subprocess and kill ROS console worker thread
-	self.encourager_unit.stopExercise()
-	self.rosConsoleWriter.killthread = True
+	#self.exercise_process.communicate(input="q")
+        self.exercise_process.terminate()
+	self.exercise_process.wait()
+	self.exercise_process = None
 
 	# enable all other buttons again
-	self.btnExercise1.setEnabled(True)
-	self.btnExercise2.setEnabled(True)
-	self.btnExercise3.setEnabled(True)
-	self.btnExercise4.setEnabled(True)
+	self.btnFlexionMotionExercise.setEnabled(True)
+	self.btnAbductionMotionExercise.setEnabled(True)
+	self.btnInternalRotationExercise.setEnabled(True)
+	self.btnExternalRotationExercise.setEnabled(True)
 	self.btnBegin.setEnabled(True)
 	self.btnStop.setEnabled(False)
-	selectedButton = 0
 	self.txtViewROSConsole.appendPlainText("********************* END EXERCISE *********************")
-	self.txtViewROSConsole.appendPlainText("Exercise " + str(self.selectedButton) + ": STOPPED!")
 
     def appendToTextView(self, line):
 	self.txtViewROSConsole.appendPlainText(line)
+
+    def openPreferences(self):
+	self.preferences.show()
+
+    def updateExerciseParams(self, width, height, color, number_of_repetitions, time_limit):
+	self.exercise_width = width
+        self.exercise_height = height
+        self.exercise_color = color
+        self.exercise_number_of_repetitions = number_of_repetitions
+        self.exercise_time_limit = time_limit
 
     def closeEvent(self, event):
         reply = QtGui.QMessageBox.question(self, 'Message',
             "Are you sure that you want to quit?", QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
 
         if reply == QtGui.QMessageBox.Yes:
-		self.encourager_unit.wm_voice_generator_node.terminate()
-		self.encourager_unit.wm_voice_generator_node.wait()
-		self.encourager_unit.soundplay_node.terminate()
-		self.encourager_unit.soundplay_node.wait()
-		self.encourager_unit.roscore_node.terminate()
-		self.encourager_unit.roscore_node.wait()
+		if hasattr(self, "exercise_process") and self.exercise_process != None:
+			#self.exercise_process.communicate(input="q")
+			self.exercise_process.terminate() 
+			self.exercise_process.wait()
 		event.accept()
         else:
 		event.ignore()
@@ -330,7 +352,7 @@ if __name__ == "__main__":
     import sys
     app = QtGui.QApplication(sys.argv)
     myapp = QTRehaZenterGUI() 
-    app.processEvents()
+    #app.processEvents()
     myapp.show()
     sys.exit(app.exec_())
 

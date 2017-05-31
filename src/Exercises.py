@@ -17,6 +17,7 @@ import shlex
 from subprocess import Popen,PIPE,STDOUT
 from threading import Thread
 from time import sleep
+import signal
 
 #                 |y=-0.1
 #        D        |      A
@@ -31,9 +32,9 @@ from time import sleep
 class Limb:
 	LEFT_ARM, RIGHT_ARM, LEFT_LEG, RIGHT_LEG = range(4)
 class RotationType:
-	INTERNAL, EXTERNAL = range(2)
+	_unused, INTERNAL, EXTERNAL = range(3)
 class MotionType:
-	FLEXION, ABDUCTION = range(2)
+	_unused, FLEXION, ABDUCTION = range(3)
 class Color:
 	YELLOW, BLUE, BLACK = range(3)
 
@@ -54,6 +55,31 @@ def get_hsv_thresholds(color):
 	else:
 		raise ValueError("Unknown or unused color!")
 	return (THRESHOLD_LOW, THRESHOLD_HIGH)
+
+# method that processes the arguments given as a parameter
+def process_args(argv):
+	# define arguments to parse from the argument vector
+	parser = argparse.ArgumentParser(description='Reads video footage from a camera or a video file, and performs the Rehazenter exercise on it.')
+	parser.add_argument('--width', type=int, dest="width", help='width of the camera window')
+	parser.add_argument('--height', type=int, dest="height", help='height of the camera window')
+	parser.add_argument('--path-to-video', type=str, dest="path_to_video", help='file path to the video file (default: webcam)')
+	#parser.add_argument('--path-to-samples-folder', '-f', type=str, dest="arg_path_to_samples_folder", help='path to the folder where the object\'s image samples are stored')
+	parser.add_argument('--color', type=str, dest="color", help='the color of the object that should be tracked (default=yellow, supported=yellow,black,blue)')
+	parser.add_argument('--spawn_nodes', action="store_true", dest="spawn_nodes", help='pass this argument in order to launch all the needed ROS nodes, if they aren\'t running already')
+	parser.add_argument('--motion_type', type=int, dest="motion_type", help='if specified value is valid, then it creates a simple motion exercise of the specified motion type (0=unused, 1=Flexion, 2=Abduction)')
+	parser.add_argument('--rotation_type', type=int, dest="rotation_type", help='if specified value is valid, then it creates a rotation exercise of the specified rotation type (0=unused, 1=Internal, 2=External)')
+	parser.add_argument('--number_of_repetitions', type=int, dest="number_of_repetitions", help='amount of repetitions to perform until completion of the exercise session')
+	parser.add_argument('--time_limit', type=int, dest="time_limit", help='time limit that the patient has to complete his exercise')
+	parser.add_argument('--limb', type=int, dest="limb", help='limb of the patient to be used for the exercise')
+	parser.add_argument('--calibration_duration', type=int, dest="calibration_duration", help='duration (in seconds) of the calibration procedure for the exercise')
+	args = parser.parse_args(argv)
+
+	# create exercise with all passed arguments and return it
+	if args.rotation_type != 0 and args.motion_type == 0:
+		exercise = RotationExercise(repetitions_limit=args.number_of_repetitions, calibration_duration=args.calibration_duration, camera_resolution=(args.width,args.height), color=string_to_color(args.color), limb=args.limb, time_limit=args.time_limit, path_to_video=args.path_to_video, spawn_ros_nodes=args.spawn_nodes)	
+	else:
+		exercise = SimpleMotionExercise(repetitions_limit=args.number_of_repetitions, calibration_duration=args.calibration_duration, camera_resolution=(args.width,args.height), color=string_to_color(args.color), limb=args.limb, time_limit=args.time_limit, path_to_video=args.path_to_video, spawn_ros_nodes=args.spawn_nodes)	
+	return exercise
 
 # returns the correct Color type for a color's string representation, passed as a parameter
 def string_to_color(color_str):
@@ -76,6 +102,13 @@ class VideoReader(Thread):
                 self._center = None
                 self._radius = 0
 		self._kill_thread = False
+
+		# define behaviour when SIGINT or SIGTERM received
+		signal.signal(signal.SIGINT, self.exit_gracefully)
+    		signal.signal(signal.SIGTERM, self.exit_gracefully)
+
+	def exit_gracefully(self, signum, frame):
+		self.set_kill_thread()
 
 	# ****************************** property definitions for the base class ******************************
 	@property
@@ -100,7 +133,9 @@ class VideoReader(Thread):
 	@path_to_video.setter
 	def path_to_video(self, path_to_video):
 		# TODO: add more checks here! (f.ex. type checking)
-		if path_to_video == "" or os.path.isfile(path_to_video):
+		if path_to_video == None:
+			self._path_to_video = ""
+		elif path_to_video == "" or os.path.isfile(path_to_video):
 			self._path_to_video = path_to_video
 		else:
 			raise ValueError("Specified video file does not exist!")
@@ -148,6 +183,7 @@ class VideoReader(Thread):
 		# check if camera/video file was opened successfully
 		if not self._cap.isOpened():
 			raise Exception("Failed to open video capture stream! Aborting...")
+			#self.set_kill_thread()
 	
                 # Minimum required radius of enclosing circle of contour
                 MIN_RADIUS = 2
@@ -155,8 +191,8 @@ class VideoReader(Thread):
                 # read frames from the capture device until interruption
                 while not self._kill_thread:
                     rval, img_original = self._cap.read()
-                    if not rval:
-                            raise Exception("Failed to get frame from capture device!")
+                    #if not rval:
+                    #        raise Exception("Failed to get frame from capture device!")
 		    self._img_original = img_original.copy()
 
                     # Blur image to remove noise
@@ -225,22 +261,10 @@ class EncouragerUnit(object):
 			raise ValueError("Argument spawn_ros_nodes is not boolean!")
 
 	def __init__(self, repetitions_limit=10, spawnRosNodes=False):
-		if spawnRosNodes:
-			# launch roscore, wm_voice_manager and soundplay
-			self.roscore_node = Popen(['roscore'], stdout=None, stderr=None)
-			sleep(0.5)
-			print "Launched roscore."
-			#self.soundplay_node = Popen(['rosrun', 'sound_play', 'soundplay_node.py'], stdout=None, stderr=None)
-			#self.wm_voice_generator_node = Popen(['rosrun', 'wm_voice_generator', 'wm_voice_component_short.py'], stdout=None, stderr=None)
-			soundplay = roslaunch.core.Node("sound_play", "soundplay_node.py")
-			wm_voice_generator = roslaunch.core.Node("wm_voice_generator", "wm_voice_component_short.py")
-			launch = roslaunch.scriptapi.ROSLaunch()
-			launch.start()
-			self.soundplay_node = launch.launch(soundplay)
-			print "Launched soundplay."
-			self.wm_voice_generator_node = launch.launch(wm_voice_generator)
-			print "Launched wm_voice_generator"
 		self.spawn_ros_nodes = spawnRosNodes
+		self._ros_nodes_ready = False
+		if self.spawn_ros_nodes:
+			self.start_ros_nodes()
 		rospy.init_node('reha_game')
 		self.pub = rospy.Publisher('/robot/voice', String)
 		self.load_sentences()
@@ -254,12 +278,34 @@ class EncouragerUnit(object):
 		self.sentences = sentences_file.readlines()
 		sentences_file.close()
 
-	def init_exercise(self, width=640, height=480):
-		self.exercise_node = Popen(['rosrun', 'reha_game', 'Exercise1.py', '--width', str(width), '--height', str(height), '--calibrate'], stdout=PIPE, stderr=STDOUT)
+	def start_ros_nodes(self):
+		# launch roscore, wm_voice_manager and soundplay
+		self._roscore_node = Popen(['roscore'], stdout=None, stderr=None)
+		sleep(0.5)
+		print "Launched roscore."
+		#self.soundplay_node = Popen(['rosrun', 'sound_play', 'soundplay_node.py'], stdout=None, stderr=None)
+		#self.wm_voice_generator_node = Popen(['rosrun', 'wm_voice_generator', 'wm_voice_component_short.py'], stdout=None, stderr=None)
+		soundplay = roslaunch.core.Node("sound_play", "soundplay_node.py")
+		wm_voice_generator = roslaunch.core.Node("wm_voice_generator", "wm_voice_component_short.py")
+		launch = roslaunch.scriptapi.ROSLaunch()
+		launch.start()
+		self._soundplay_node = launch.launch(soundplay)
+		sleep(2)
+		print "Launched soundplay."
+		self._wm_voice_generator_node = launch.launch(wm_voice_generator)
+		print "Launched wm_voice_generator"
+		self._ros_nodes_ready = True
 
-	def stop_exercise(self):
-		self.exercise_node.kill()
-		self.exercise_node.wait()
+	def stop_ros_nodes(self):
+		if self._ros_nodes_ready:
+			if self._soundplay_node.is_alive():
+				self._soundplay_node.stop()
+			if self._wm_voice_generator_node.is_alive():
+				self._wm_voice_generator.stop()
+			if self.roscore_node != None :
+				self._roscore_node.terminate()
+				self._roscore_node.wait()
+			self._ros_nodes_ready = False
 
 	def inc_repetitions_counter(self):
 		self.repetitions += 1
@@ -283,12 +329,18 @@ class EncouragerUnit(object):
 # implementation of a custom timer thread that simply counts seconds up to some defined limit
 class Timer(Thread):
 	def __init__(self, seconds=1):
-		self.seconds = seconds
+		self._seconds = seconds
+		self._kill_timer = False
 		Thread.__init__(self)
 	def run(self):
-		temp = (self.seconds*1.0)/100.0
+		temp = (self._seconds*1.0)/100.0
 		for i in xrange(1,100):
 			sleep(temp)
+			if self._kill_timer:
+				break
+
+	def kill_timer(self):
+		self._kill_timer = True
 
 
 # *************************************************************
@@ -299,7 +351,7 @@ class Timer(Thread):
 class Exercise:
 	__metaclass__ = ABCMeta
 
-	def __init__(self, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), color=Color.YELLOW, argv=None, limb=Limb.LEFT_ARM, time_limit=0, path_to_video=""):
+	def __init__(self, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), color=Color.YELLOW, limb=Limb.LEFT_ARM, time_limit=0, path_to_video="", spawn_ros_nodes=False):
 		self.repetitions_limit = repetitions_limit
 		self.calibration_duration = calibration_duration
 		if calibration_duration > 0:
@@ -307,11 +359,9 @@ class Exercise:
 		self.camera_resolution = camera_resolution
 		self.limb = limb
 		self.time_limit = time_limit
-		self._spawn_nodes = False
+		self._spawn_nodes = spawn_ros_nodes
                 self._video_reader = VideoReader(camera_resolution, path_to_video, color)
-                self._video_reader.start()
-		if argv != None:
-			self.process_args(argv)
+               	self._video_reader.start()
 		self._encourager = EncouragerUnit(self.repetitions_limit, spawnRosNodes=self._spawn_nodes)
 		sleep(0.2)	# wait some miliseconds until the video reader grabs its first frame from the capture device
 
@@ -341,7 +391,7 @@ class Exercise:
 	def calibration_duration(self, calibration_duration):
 		if not (type(calibration_duration) is int):
 			raise TypeError("Integer value expected!")
-		elif calibration_duration not in range(0,30):	# max. caibration duration: 30 seconds
+		elif calibration_duration not in range(4,30):	# max. calibration duration: 30 seconds
 			raise ValueError("calibration_duration should be an integer value between 0 and 30!")
 		else:
 			self._calibration_duration = calibration_duration
@@ -389,6 +439,7 @@ class Exercise:
 
 		# Main loop
 		index=0
+		self._encourager.say("You may begin your exercise now!")
 		while self._encourager.repetitions != self._encourager.repetitions_limit:
 			# check if hand movement thresholds have been reached and count repetitions accordingly
 			if self._video_reader.center != None :
@@ -411,36 +462,14 @@ class Exercise:
 
 	def stop_game(self):
 		if self._encourager.spawn_ros_nodes:
-			self._encourager.wm_voice_generator_node.stop()
-			self._encourager.soundplay_node.stop()
-			self._encourager.roscore_node.terminate()
+			self._encourager.stop_ros_nodes()
 
-	# method that processes the arguments given as a parameter
-	def process_args(self, argv):
-		if len(argv) > 0:
-			parser = argparse.ArgumentParser(description='Reads video footage from a camera or a video file, and performs the Rehazenter exercise on it.')
-			parser.add_argument('--width', type=int, dest="width", help='width of the camera window')
-			parser.add_argument('--height', type=int, dest="height", help='height of the camera window')
-			parser.add_argument('--path-to-video', type=str, dest="path_to_video", help='file path to the video file (default: webcam)')
-			#parser.add_argument('--path-to-samples-folder', '-f', type=str, dest="arg_path_to_samples_folder", help='path to the folder where the object\'s image samples are stored')
-			parser.add_argument('--color', type=str, dest="color", help='the color of the object that should be tracked (default=yellow)')
-			parser.add_argument('--spawn_nodes', action="store_true", dest="spawn_nodes", help='pass this argument in order to launch all the needed ROS nodes, if they aren\'t running already')
-			args = parser.parse_args(argv)
-			if args.width != None and args.height != None:
-				self._video_reader.camera_resolution = (args.width, args.height)
-			if args.color != None:
-				self._video_reader.color = string_to_color(args.color)
-			if args.path_to_video != None:
-				self._video_reader.path_to_video = args.path_to_video
-			else:
-				self._video_reader.path_to_video = ""
-			self._spawn_nodes = args.spawn_nodes
 
 
 # exercise that counts circular movements performed on the table surface
 class RotationExercise(Exercise):
-	def __init__(self, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), color=Color.YELLOW, argv=None, limb=Limb.LEFT_ARM, time_limit=0, rotation_type=RotationType.INTERNAL):
-		super(RotationExercise, self).__init__(repetitions_limit, calibration_duration, camera_resolution, color, argv, limb)
+	def __init__(self, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), color=Color.YELLOW, limb=Limb.LEFT_ARM, time_limit=0, path_to_video="", spawn_ros_nodes=False, rotation_type=RotationType.INTERNAL):
+		super(RotationExercise, self).__init__(repetitions_limit, calibration_duration, camera_resolution, color, limb, time_limit, path_to_video, spawn_ros_nodes)
 		self._rotation_type = rotation	
 
 	@property
@@ -459,8 +488,8 @@ class RotationExercise(Exercise):
 
 # exercise that counts simple movements with 2 or 3 point coordinates performed on the table surface
 class SimpleMotionExercise(Exercise):
-	def __init__(self, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), color=Color.YELLOW, argv=None, limb=Limb.LEFT_ARM, time_limit=0, motion_type=MotionType.FLEXION):
-		super(SimpleMotionExercise, self).__init__(repetitions_limit, calibration_duration, camera_resolution, color, argv, limb)
+	def __init__(self, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), color=Color.YELLOW, limb=Limb.LEFT_ARM, time_limit=0, path_to_video="", spawn_ros_nodes=False, motion_type=MotionType.FLEXION):
+		super(SimpleMotionExercise, self).__init__(repetitions_limit, calibration_duration, camera_resolution, color, limb, time_limit, path_to_video, spawn_ros_nodes)
 		self._motion_type = motion_type
 
 	@property
@@ -477,7 +506,8 @@ class SimpleMotionExercise(Exercise):
 	def calibrate(self):
 		# check if capture device running
                 if not (self._video_reader.is_alive()):
-			raise Exception("Capture device not initialized!")
+			return 1
+			#raise Exception("Capture device not initialized!")
 
 		# define number of calibration points to record (depends on exercise)
 		number_of_calibration_points = 0
@@ -490,6 +520,8 @@ class SimpleMotionExercise(Exercise):
 
 		# Main calibration loop
 		timer = 0
+		# sleep for 2 seconds in order to wait for soundplay to be ready
+		sleep(2)
 		self._encourager.say("Calibrating now... please move your hand to the desired position on the table and hold for a few seconds.")
 		while len(self._calibration_points) < number_of_calibration_points:
 			# get next frame from capture device
@@ -514,9 +546,13 @@ class SimpleMotionExercise(Exercise):
 			if cv2.waitKey(1) & 0xFF == ord('q'):
 				self._video_reader.set_kill_thread()
 				self._video_reader.join()
+			if not self._video_reader.is_alive():
+				timer.kill_timer()
+				timer.join()
 				cv2.destroyAllWindows()
-				raise Exception("Video reader terminated before calibration process finished! Aborting...")
-		self._encourager.say("Calibration completed! You may start your exercise now!")
+				return 2
+		self._encourager.say("Calibration completed!")
+		return 0
 
 #class ConesExercise(Exercise)
 
@@ -528,13 +564,8 @@ class SimpleMotionExercise(Exercise):
 if __name__ == '__main__':
 	# use the "rospy.myargv" argument vector instead of the built-in "sys.argv" to avoid problems with ROS argument re-mapping
 	# (reason: https://groups.google.com/a/rethinkrobotics.com/forum/#!topic/brr-users/ErXVWhRmtNA)
-	motion_ex = SimpleMotionExercise(argv=rospy.myargv()[1:])
-	try:
-		motion_ex.calibrate()
-	except Exception:
-		# stop all ROS nodes and exit
-		motion_ex.stop_game()
-		sys.exit()
-	motion_ex.start_game()
-	motion_ex.stop_game()
+	exercise = process_args(rospy.myargv()[1:])
+	if exercise.calibrate() == 0:
+		exercise.start_game()
+	exercise.stop_game()
 	sys.exit()

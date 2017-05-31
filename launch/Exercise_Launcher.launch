@@ -1,0 +1,15 @@
+<launch>
+	<arg name="width" default="640" />
+	<arg name="height" default="480" />
+	<arg name="color" default="yellow" />
+	<arg name="motion_type" default="1" />
+	<arg name="rotation_type" default="0" />
+	<arg name="number_of_repetitions" default="10" />
+	<arg name="time_limit" default="0" />
+	<arg name="limb" default="0" />
+	<arg name="calibration_duration" default="10" />
+	
+	<node pkg="sound_play" type="soundplay_node.py" name="sound_play" />
+	<node pkg="wm_voice_generator" type="wm_voice_component_short.py" name="wm_voice_generator" />
+	<node pkg="reha_game" type="Exercises.py" name="reha_game" args="--width $(arg width) --height $(arg height) --color $(arg color) --motion_type $(arg motion_type) --rotation_type $(arg rotation_type) --number_of_repetitions $(arg number_of_repetitions) --time_limit $(arg time_limit) --limb $(arg limb) --calibration_duration $(arg calibration_duration)" output="screen" />
+</launch>

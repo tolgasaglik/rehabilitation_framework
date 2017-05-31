@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>957</width>
+    <width>1011</width>
     <height>1089</height>
    </rect>
   </property>
@@ -213,7 +213,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>957</width>
+     <width>1011</width>
      <height>35</height>
     </rect>
    </property>
@@ -221,7 +221,7 @@
     <property name="title">
      <string>File</string>
     </property>
-    <addaction name="actionSettings"/>
+    <addaction name="actionPreferences"/>
     <addaction name="separator"/>
     <addaction name="actionQuit"/>
    </widget>
@@ -257,7 +257,7 @@
     <bool>false</bool>
    </attribute>
   </widget>
-  <action name="actionSettings">
+  <action name="actionPreferences">
    <property name="text">
     <string>Preferences</string>
    </property>
