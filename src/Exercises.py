@@ -274,7 +274,8 @@ class EncouragerUnit(object):
 		if self.spawn_ros_nodes:
 			self.start_ros_nodes()
 		rospy.init_node('reha_game')
-		self._pub = rospy.Publisher('/robot/voice', String)
+		self._pub = rospy.Publisher('/robot/voice', String, queue_size=1)
+		self._pub_face = rospy.Publisher('/qt_face/setEmotion', String, queue_size=1)
 		self.load_sentences()
 		self._repetitions_limit = repetitions_limit
 
@@ -319,6 +320,9 @@ class EncouragerUnit(object):
 		self._repetitions += 1
 		self._pub.publish(str(self.repetitions))
 		print "Current number of repetitions done: " +str(self._repetitions)
+		if self._repetitions == 1:
+			self._pub_face.publish('happy')
+			
 		if self._repetitions == self._repetitions_limit/2:
 			self._pub.publish(self._sentences[0])
 			print self._sentences[0]
