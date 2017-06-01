@@ -34,6 +34,7 @@ class UIPreferencesWidget(QtGui.QWidget):
         self._original_nbr_repetitions= main_window_ref.exercise_number_of_repetitions
         self._original_time_limit = main_window_ref.exercise_time_limit
         self._original_color = main_window_ref.exercise_color
+	self._original_calib_duration = main_window_ref.exercise_calibration_duration
 
 	# initialize value of widgets
         self.spnWidth.setValue(self._original_width)
@@ -41,6 +42,7 @@ class UIPreferencesWidget(QtGui.QWidget):
         self.spnNbrRepetitions.setValue(self._original_nbr_repetitions)
         self.spnTimeLimit.setValue(self._original_time_limit)
 	self.cmbColor.setCurrentIndex(self.cmbColor.findText(self._original_color))
+	self.spnCalibDuration.setValue(self._original_calib_duration)
 
     def setupUi(self):
         self.setObjectName(_fromUtf8("preferencesWidget"))
@@ -206,13 +208,14 @@ class UIPreferencesWidget(QtGui.QWidget):
         self.btnSaveChanges.setText(_translate("preferencesWidget", "Save changes", None))
 
     def btnSaveChangesClicked(self):
-        self._main_window_ref.updateExerciseParams(self.spnWidth.value(), self.spnHeight.value(), str(self.cmbColor.currentText()), self.spnNbrRepetitions.value(), self.spnTimeLimit.value())
+        self._main_window_ref.updateExerciseParams(self.spnWidth.value(), self.spnHeight.value(), str(self.cmbColor.currentText()), self.spnNbrRepetitions.value(), self.spnTimeLimit.value(), self.spnCalibDuration.value())
         
         self._original_width = self.spnWidth.value()
         self._original_height = self.spnHeight.value()
         self._original_nbr_repetitions = self.spnNbrRepetitions.value()
         self._original_time_limit = self.spnTimeLimit.value()
         self._original_color = str(self.cmbColor.currentText())
+	self._original_calib_duration = self.spnCalibDuration.value()
 	self.close()
 
     def btnCancelClicked(self):

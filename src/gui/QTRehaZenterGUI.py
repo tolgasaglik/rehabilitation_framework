@@ -50,6 +50,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.exercise_color = "yellow"
         self.exercise_number_of_repetitions = 10
         self.exercise_time_limit = 0
+	self.exercise_calibration_duration = 5
 
 	# initialize preferences widget
 	self.preferences = QTRehaZenterGUI_Preferences.UIPreferencesWidget(self)
@@ -286,7 +287,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	launch_params.extend(('width:='+str(self.exercise_width), 'height:='+str(self.exercise_height), 'color:='+self.exercise_color, 'number_of_repetitions:='+str(self.exercise_number_of_repetitions), "time_limit:="+str(self.exercise_time_limit)))
 	#if self.btnFlexionMotionExercise.isChecked():
         #self.launcher = roslaunch.parent.ROSLaunchParent(uuid, ["./../../launch/Exercise_Launcher.launch"])
-	self.exercise_process = Popen(launch_params, stdin=PIPE)
+	self.exercise_process = Popen(launch_params)
 		
 	# second approach to running exercise (not working atm, needs callback)
 	#config = roslaunch.launch.ROSLaunchConfig()
@@ -326,12 +327,13 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
     def openPreferences(self):
 	self.preferences.show()
 
-    def updateExerciseParams(self, width, height, color, number_of_repetitions, time_limit):
+    def updateExerciseParams(self, width, height, color, number_of_repetitions, time_limit, calibration_duration):
 	self.exercise_width = width
         self.exercise_height = height
         self.exercise_color = color
         self.exercise_number_of_repetitions = number_of_repetitions
         self.exercise_time_limit = time_limit
+	self.eexercise_calibration_duration = calibration_duration
 
     def closeEvent(self, event):
         reply = QtGui.QMessageBox.question(self, 'Message',

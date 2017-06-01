@@ -62,7 +62,7 @@ def process_args(argv):
 	parser = argparse.ArgumentParser(description='Reads video footage from a camera or a video file, and performs the Rehazenter exercise on it.')
 	parser.add_argument('--width', type=int, default=640, dest="width", help='width of the camera window')
 	parser.add_argument('--height', type=int, default=480, dest="height", help='height of the camera window')
-	parser.add_argument('--path-to-video', type=str, default="", dest="path_to_video", help='file path to the video file (default: webcam)')
+	parser.add_argument('--path_to_video', type=str, default="", dest="path_to_video", help='file path to the video file (default: webcam)')
 	#parser.add_argument('--path-to-samples-folder', '-f', type=str, dest="arg_path_to_samples_folder", help='path to the folder where the object\'s image samples are stored')
 	parser.add_argument('--color', type=str, default="yellow", dest="color", help='the color of the object that should be tracked (default=yellow, supported=yellow,black,blue)')
 	parser.add_argument('--spawn_nodes', action="store_true", dest="spawn_nodes", help='pass this argument in order to launch all the needed ROS nodes, if they aren\'t running already')
@@ -332,6 +332,7 @@ class EncouragerUnit(object):
 	def say(self, sentence):
 		self._pub.publish(sentence)
 		print "The robot says: \"" + sentence + "\""
+		sleep(len(sentence) / 20.0)
 
 
 # implementation of a custom timer thread that simply counts seconds up to some defined limit
@@ -373,9 +374,9 @@ class Exercise:
 		self._encourager = EncouragerUnit(self.repetitions_limit, spawnRosNodes=self._spawn_nodes)
 		sleep(0.2)	# wait some miliseconds until the video reader grabs its first frame from the capture device
 
-		# define tolerance values for both axis, in case we're calibrating manually
-		self._tolerance_x = camera_resolution[0] / 8
-		self._tolerance_y = camera_resolution[1] / 8
+		# define tolerance values for both axis when calibrating manually
+		self._tolerance_x = camera_resolution[0] / 12
+		self._tolerance_y = camera_resolution[1] / 12
 		if camera_resolution[0] > 2*camera_resolution[1]:
 			self._tolerance_x = camera_resolution[0] / 6
 		elif 2*camera_resolution[0] < camera_resolution[1]:
@@ -456,10 +457,10 @@ class Exercise:
 			# check if hand movement thresholds have been reached and count repetitions accordingly
 			if self._video_reader.center != None :
 				if abs(self._video_reader.center[0]-(self._calibration_points[index])[0]) < self._tolerance_x and abs(self._video_reader.center[1]-(self._calibration_points[index])[1]) < self._tolerance_y :
-						index += 1
-						if index == len(self._calibration_points):
-							index = 0
-							self._encourager.inc_repetitions_counter()
+					index += 1
+					if index == len(self._calibration_points):
+						index = 0
+						self._encourager.inc_repetitions_counter()
 							
 			# display images and quit loop if "q"-key was pressed
 			cv2.imshow("Original image", self._video_reader.img_original)
@@ -467,22 +468,25 @@ class Exercise:
 
 			# check termination conditions
 			if cv2.waitKey(1) & 0xFF == ord('q'):
-				self._video_reader.set_kill_thread()
-				self._video_reader.join()
 				break
-			if not self._video_reader.is_alive():
-				if self.time_limit > 0 and timer.is_alive():
-					timer.kill_timer()
-					timer.join()
-					self._encourager.say("Time is over!")
-					sleep(1)
-					self._encourager.say("You did " + str(self._encourager.repetitions) + " total repetitions.")
-					# TODO: play random congratulation sentence depending on performance
-					timer.kill_timer()
-					timer.join()
+			elif self.time_limit > 0 and not timer.is_alive():
 				break
+
+		# kill video reader and timer threads
+		if self._video_reader.is_alive():
+			self._video_reader.set_kill_thread()
+			self._video_reader.join()
 		cv2.destroyAllWindows()
 		print "Video reader terminated!"
+		if self.time_limit > 0:
+			if timer.is_alive():
+				timer.kill_timer()
+				timer.join()
+			else:
+				self._encourager.say("Time is over!")
+				self._encourager.say("You did " + str(self._encourager.repetitions) + " total repetitions.")
+				# TODO: play random congratulation sentence depending on performance
+			print "Timer thread terminated!"
 
 	def stop_game(self):
 		if self._encourager.spawn_ros_nodes:
@@ -541,9 +545,12 @@ class SimpleMotionExercise(Exercise):
 
 		# set this variable to whatever time you want (in seconds!)
 		CALIBRATION_DURATION_SECS = 10
+		# number of frames to wait when no object detected (before warning user)
+		NO_CENTER_FOUND_MAX = 150
 
 		# Main calibration loop
-		timer = 0
+		timer = None
+		no_center_found_counter = 0
 		# sleep for 2 seconds in order to wait for soundplay to be ready
 		sleep(2)
 		self._encourager.say("Calibrating now... please move your hand to the desired position on the table and hold for a few seconds.")
@@ -552,17 +559,34 @@ class SimpleMotionExercise(Exercise):
 			frame = self._video_reader.img_modified
 
 			# (re-)initialize timer if necessary
-			if timer == None or timer == 0:
+			if timer == None and no_center_found_counter < NO_CENTER_FOUND_MAX:
 				timer = Timer(CALIBRATION_DURATION_SECS)
 				timer.start()
 				if len(self._calibration_points) > 0:
 					self._encourager.say("Now, move your arm to the next position and hold it for a few seconds.")
 
-			# store coordinates when timer has run out
-			if timer != None and timer.is_alive() == False:
-				self._calibration_points.append(self._video_reader.center)
-				del timer
+			# if no object was found in the video capture for some time, wait for object to reappear
+			if self._video_reader.center != None:
+				if no_center_found_counter > 0:
+					no_center_found_counter -= 1
+				# store coordinates when timer has run out
+				if timer != None and timer.is_alive() == False:
+					# check if any of the recorded points are too close to each other before inserting
+					if len(self._calibration_points) > 0 and (abs((self._calibration_points[len(self._calibration_points)-1])[0]-self._video_reader.center[0]) < self._tolerance_x or abs((self._calibration_points[len(self._calibration_points)-1])[1]-self._video_reader.center[1]) < self._tolerance_y):
+						self._encourager.say("The calibration points are too close to each other. Please make sure that the points are further away from each other.")
+						self._calibration_points = []
+						self._encourager.say("Let's try to calibrate again now!")
+					elif no_center_found_counter == 0:
+						self._calibration_points.append(self._video_reader.center)
+					timer = None
+			elif no_center_found_counter < NO_CENTER_FOUND_MAX:
+				no_center_found_counter += 1
+			elif no_center_found_counter == NO_CENTER_FOUND_MAX and timer != None and timer.is_alive():
+				self._encourager.say("I cannot find your hand. Please move it closer to the camera.")
+				timer.kill_timer()
+				timer.join()
 				timer = None
+
 
 			# display images and quit loop if "q"-key was pressed
 			cv2.imshow("Original image", self._video_reader.img_original)
@@ -571,8 +595,9 @@ class SimpleMotionExercise(Exercise):
 				self._video_reader.set_kill_thread()
 				self._video_reader.join()
 			if not self._video_reader.is_alive():
-				timer.kill_timer()
-				timer.join()
+				if timer != None:
+					timer.kill_timer()
+					timer.join()
 				cv2.destroyAllWindows()
 				return 2
 		self._encourager.say("Calibration completed!")

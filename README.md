@@ -1,29 +1,31 @@
 # README #
 
-This README would normally document whatever steps are necessary to get your application up and running.
+This README currently only describes how to set up the QT RehaZenter exercise assistant and how to get it running.
 
 ### What is this repository for? ###
 
-* Quick summary
-* Version
-* [Learn Markdown](https://bitbucket.org/tutorials/markdowndemo)
+This repository contains my master thesis work for the University of Luxembourg, in collaboration with the RehaZenter facility in Kirchberg, Luxembourg. We have developed/are developing an exercise assistant that is capable of deploying and running an exercise session for heart stroke patients and elderly people on the QT Robot, completely autonomously.
 
 ### How do I get set up? ###
 
-* Summary of set up
-* Configuration
-* Dependencies
-* Database configuration
-* How to run tests
-* Deployment instructions
+* Package dependencies
+Before running the application, you need to download the Qt4 and PyQt4 packages. Run the following commands to do so:
+`sudo apt-get install libqt4-dev python-qt4`
 
-### Contribution guidelines ###
+* How to run
+You can run the GUI application using the following commands:
+`cd reha_game/src/gui && python QTRehaZenterGUI.py`
 
-* Writing tests
-* Code review
-* Other guidelines
+If you wish to only run the ROSLaunch file without the GUI, simply run:
+
+`roslaunch reha_game Exercise_Launcher`
+
+By default, this exercise has been initialized with 10 repetitions and no time limit. You can change these parameters in the GUI itself by clicking on the "File" tab and then clicking on "Preferences...", or directly in the roslaunch call as arguments like so:
+
+`roslaunch reha_game Exercise_Launcher number_of_repetitions:=20 time_limit:=600` (time limit in seconds)
+
+Take a look at the above launch file if you want to check which other parameters you can set.
 
 ### Who do I talk to? ###
 
-* Repo owner or admin
-* Other community or team contact
+* leandro.gomes.001@student.uni.lu
