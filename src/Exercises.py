@@ -186,7 +186,7 @@ class VideoReader(Thread):
 			#self.set_kill_thread()
 	
                 # Minimum required radius of enclosing circle of contour
-                MIN_RADIUS = 2
+                MIN_RADIUS = 40
 
                 # read frames from the capture device until interruption
                 while not self._kill_thread:
@@ -336,7 +336,6 @@ class EncouragerUnit(object):
 	def say(self, sentence):
 		self._pub.publish(sentence)
 		print "The robot says: \"" + sentence + "\""
-		sleep(len(sentence) / 20.0)
 
 
 # implementation of a custom timer thread that simply counts seconds up to some defined limit
@@ -547,46 +546,48 @@ class SimpleMotionExercise(Exercise):
 			number_of_calibration_points = 2
 		self._calibration_points = []
 
-		# set this variable to whatever time you want (in seconds!)
-		CALIBRATION_DURATION_SECS = 10
 		# number of frames to wait when no object detected (before warning user)
-		NO_CENTER_FOUND_MAX = 150
+		NO_CENTER_FOUND_MAX = 200
 
 		# Main calibration loop
 		timer = None
 		no_center_found_counter = 0
+		no_center_found_flag = False
 		# sleep for 2 seconds in order to wait for soundplay to be ready
 		sleep(2)
-		self._encourager.say("Calibrating now... please move your hand to the desired position on the table and hold for a few seconds.")
+		self._encourager.say("Please move your hand to your desired position and hold for a few seconds.")
 		while len(self._calibration_points) < number_of_calibration_points:
 			# get next frame from capture device
 			frame = self._video_reader.img_modified
 
 			# (re-)initialize timer if necessary
 			if timer == None and no_center_found_counter < NO_CENTER_FOUND_MAX:
-				timer = Timer(CALIBRATION_DURATION_SECS)
+				timer = Timer(self.calibration_duration)
 				timer.start()
 				if len(self._calibration_points) > 0:
-					self._encourager.say("Now, move your arm to the next position and hold it for a few seconds.")
+					self._encourager.say("Now move your arm to the next position and hold it for a few seconds.")
 
 			# if no object was found in the video capture for some time, wait for object to reappear
 			if self._video_reader.center != None:
 				if no_center_found_counter > 0:
 					no_center_found_counter -= 1
+					if no_center_found_counter == 0 and no_center_found_flag:
+						self._encourager.say("Let's try to calibrate again!")
+						no_center_found_flag = False
 				# store coordinates when timer has run out
 				if timer != None and timer.is_alive() == False:
 					# check if any of the recorded points are too close to each other before inserting
 					if len(self._calibration_points) > 0 and (abs((self._calibration_points[len(self._calibration_points)-1])[0]-self._video_reader.center[0]) < self._tolerance_x or abs((self._calibration_points[len(self._calibration_points)-1])[1]-self._video_reader.center[1]) < self._tolerance_y):
 						self._encourager.say("The calibration points are too close to each other. Please make sure that the points are further away from each other.")
 						self._calibration_points = []
-						self._encourager.say("Let's try to calibrate again now!")
 					elif no_center_found_counter == 0:
 						self._calibration_points.append(self._video_reader.center)
 					timer = None
 			elif no_center_found_counter < NO_CENTER_FOUND_MAX:
 				no_center_found_counter += 1
-			elif no_center_found_counter == NO_CENTER_FOUND_MAX and timer != None and timer.is_alive():
-				self._encourager.say("I cannot find your hand. Please move it closer to the camera.")
+			elif no_center_found_counter == NO_CENTER_FOUND_MAX and timer != None and timer.is_alive() and not no_center_found_flag:
+				no_center_found_flag = True
+				self._encourager.say("I cannot find your object. Please move it closer to the camera.")
 				timer.kill_timer()
 				timer.join()
 				timer = None
