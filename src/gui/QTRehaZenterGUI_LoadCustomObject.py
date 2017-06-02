@@ -1,6 +1,6 @@
 from PyQt4 import uic
 from PyQt4.QtCore import QPoint
-from PyQt4.QtGui import QColor, QWidget, QFileDialog, QGraphicsScene, QImage, QPixmap, QGraphicsPixmapItem
+from PyQt4.QtGui import QColor, QSizePolicy, QWidget, QFileDialog, QGraphicsScene, QGraphicsView, QImage, QPixmap, QGraphicsPixmapItem
 
 class UILoadCustomObjectWidget(QWidget):
 	def __init__(self, main_window_ref):
@@ -16,6 +16,15 @@ class UILoadCustomObjectWidget(QWidget):
 
 		# initialize image graphics view
 		self._imageScene = QGraphicsScene()
+		self._detected_colors = []
+		self._detected_colors_index = -1
+
+		# make QGraphicsView objects invisible on startup
+
+		widgets = (self.gridLayoutColors.itemAt(i).widget() for i in range(self.gridLayoutColors.count()))
+                for w in widgets:
+			if isinstance(w, QGraphicsView):
+				w.setVisible(False)
 		
 		# TODO: connect buttons to functions
 		self.btnLoadImage.clicked.connect(self.btnLoadImageClicked)
@@ -30,9 +39,22 @@ class UILoadCustomObjectWidget(QWidget):
 
 	def getRGBFromPixel(self, event):
 		pixel_coords = QPoint(event.pos().x(), event.pos().y())
-		color = QColor.fromRgb(self._image.pixel(pixel_coords))
-		if color.isValid():
-			print "Selected color: RED=" + str(color.red()) + ", GREEN=" + str(color.green()) + ", BLUE=" + str(color.blue())
+		self._detected_colors.append(QColor.fromRgb(self._image.pixel(pixel_coords)))
+		self._detected_colors_index += 1
+		if self._detected_colors[self._detected_colors_index].isValid():
+			print "Selected color: RED=" + str(self._detected_colors[self._detected_colors_index].red()) + ", GREEN=" + str(self._detected_colors[self._detected_colors_index].green()) + ", BLUE=" + str(self._detected_colors[self._detected_colors_index].blue())
+			pixel_color_hsv = color.getHsv()
+			hsv_threshold_max = (0,0,0)
+			hsv_threshold_min = (0,0,0)
+			widgets = (self.gridLayoutColors.itemAt(i).widget() for i in range(self.gridLayoutColors.count())) 
+			for w in widgets:
+				if isinstance(w, QGraphicsView) and not w.isVisible():
+					w.setBackgroundBrush(color)
+					w.setForegroundBrush(color)
+					w.update()
+					w.setVisible(True)
+					break
+			
 		else:
 			print "Invalid color selected!"
 		

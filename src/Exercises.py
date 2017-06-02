@@ -100,6 +100,7 @@ class VideoReader(Thread):
                 self.path_to_video = path_to_video
                 self.color = color
                 self._center = None
+		self._last_valid_center = None
                 self._radius = 0
 		self._kill_thread = False
 
@@ -122,6 +123,10 @@ class VideoReader(Thread):
 	@property
 	def center(self):
 		return self._center
+
+	@property
+	def last_valid_center(self):
+		return self._last_valid_center
 
 	@property
 	def radius(self):
@@ -236,6 +241,7 @@ class VideoReader(Thread):
 
                     # draw circle arround the detected object and write number of repetitions done on frame
                     if self._center != None:
+			    self._last_valid_center = self._center
                             cv2.circle(self._img_original, self._center, int(round(self._radius)), np.array([0,255,0]))
                     #font = cv2.FONT_HERSHEY_SIMPLEX
                     #cv2.putText(img_original, "Repetitions: " + str(repetitions),(10,80), font, 1,(0,0,255),2)
@@ -581,7 +587,8 @@ class SimpleMotionExercise(Exercise):
 						self._encourager.say("The calibration points are too close to each other. Please make sure that the points are further away from each other.")
 						self._calibration_points = []
 					elif no_center_found_counter == 0:
-						self._calibration_points.append(self._video_reader.center)
+						# take last valid centroid that was found by video reader and store coordinates
+						self._calibration_points.append(self._video_reader.last_valid_center)
 					timer = None
 			elif no_center_found_counter < NO_CENTER_FOUND_MAX:
 				no_center_found_counter += 1

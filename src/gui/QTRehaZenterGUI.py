@@ -49,11 +49,12 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	self.exercise_width = 640
         self.exercise_height = 480
         self.exercise_color = "yellow"
+	self.exercise_custom_color = None
         self.exercise_number_of_repetitions = 10
         self.exercise_time_limit = 0
 	self.exercise_calibration_duration = 5
 
-	# initialize preferences widget
+	# initialize other widgets
 	self.preferences = QTRehaZenterGUI_Preferences.UIPreferencesWidget(self)
 	self.loadCustomObject = QTRehaZenterGUI_LoadCustomObject.UILoadCustomObjectWidget(self)
 
@@ -341,9 +342,13 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	self.exercise_width = width
         self.exercise_height = height
         self.exercise_color = color
+	self.exercise_custom_color = None
         self.exercise_number_of_repetitions = number_of_repetitions
         self.exercise_time_limit = time_limit
 	self.eexercise_calibration_duration = calibration_duration
+
+    def updateCustomColor(self, custom_color):
+	self.exercise_custom_color = custom_color
 
     def closeEvent(self, event):
         reply = QtGui.QMessageBox.question(self, 'Message',
