@@ -1,0 +1,12 @@
+string feedbacklevel
+uint8 feedback_activation 
+uint8 blocks
+uint8 repetitions
+uint8 timer
+uint8 quantitative_activate
+uint8 quantitative_fixed
+uint8 quantitative_frequency
+uint8 qualitative_actovate
+uint8 qualitative_fixed
+uint8 qualitative_frequency
+string extra
