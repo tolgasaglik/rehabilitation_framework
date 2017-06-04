@@ -23,6 +23,7 @@ sys.path.insert(0,parentdir)
 import Exercises
 from Exercises import Color,Limb,RotationType,MotionType
 import QTRehaZenterGUI_Preferences
+import QTRehaZenterGUI_LoadCustomObject
 
 try:
     _fromUtf8 = QtCore.QString.fromUtf8
@@ -48,11 +49,14 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	self.exercise_width = 640
         self.exercise_height = 480
         self.exercise_color = "yellow"
+	self.exercise_custom_color = None
         self.exercise_number_of_repetitions = 10
         self.exercise_time_limit = 0
+	self.exercise_calibration_duration = 5
 
-	# initialize preferences widget
+	# initialize other widgets
 	self.preferences = QTRehaZenterGUI_Preferences.UIPreferencesWidget(self)
+	self.loadCustomObject = QTRehaZenterGUI_LoadCustomObject.UILoadCustomObjectWidget(self)
 
     # encourager unit takes care of ROS communications and counts repetitions
     def initUi(self):
@@ -185,12 +189,15 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.toolBar_2 = QtGui.QToolBar(self)
         self.toolBar_2.setObjectName(_fromUtf8("toolBar_2"))
         self.addToolBar(QtCore.Qt.TopToolBarArea, self.toolBar_2)
+        self.actionLoadCustomObject = QtGui.QAction(self)
+        self.actionLoadCustomObject.setObjectName(_fromUtf8("actionLoadCustomObject"))
         self.actionPreferences = QtGui.QAction(self)
         self.actionPreferences.setObjectName(_fromUtf8("actionPreferences"))
         self.actionAbout = QtGui.QAction(self)
         self.actionAbout.setObjectName(_fromUtf8("actionAbout"))
         self.actionQuit = QtGui.QAction(self)
         self.actionQuit.setObjectName(_fromUtf8("actionQuit"))
+        self.menuEdit.addAction(self.actionLoadCustomObject)
         self.menuEdit.addAction(self.actionPreferences)
         self.menuEdit.addSeparator()
         self.menuEdit.addAction(self.actionQuit)
@@ -210,6 +217,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	self.btnStop.clicked.connect(self.btnStopClicked)
 	self.actionQuit.triggered.connect(self.closeEvent)
 	self.actionPreferences.triggered.connect(self.openPreferences)
+	self.actionLoadCustomObject.triggered.connect(self.openLoadCustomObject)
 
 
     def retranslateUi(self):
@@ -226,6 +234,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.toolBar.setWindowTitle(_translate("QTRehaZenter", "toolBar", None))
         self.toolBar_2.setWindowTitle(_translate("QTRehaZenter", "toolBar_2", None))
         self.actionPreferences.setText(_translate("QTRehaZenter", "Preferences", None))
+        self.actionLoadCustomObject.setText(_translate("QTRehaZenter", "Load custom object...", None))
         self.actionAbout.setText(_translate("QTRehaZenter", "About...", None))
         self.actionQuit.setText(_translate("QTRehaZenter", "Quit", None))
 
@@ -286,7 +295,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	launch_params.extend(('width:='+str(self.exercise_width), 'height:='+str(self.exercise_height), 'color:='+self.exercise_color, 'number_of_repetitions:='+str(self.exercise_number_of_repetitions), "time_limit:="+str(self.exercise_time_limit)))
 	#if self.btnFlexionMotionExercise.isChecked():
         #self.launcher = roslaunch.parent.ROSLaunchParent(uuid, ["./../../launch/Exercise_Launcher.launch"])
-	self.exercise_process = Popen(launch_params, stdin=PIPE)
+	self.exercise_process = Popen(launch_params)
 		
 	# second approach to running exercise (not working atm, needs callback)
 	#config = roslaunch.launch.ROSLaunchConfig()
@@ -326,12 +335,20 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
     def openPreferences(self):
 	self.preferences.show()
 
-    def updateExerciseParams(self, width, height, color, number_of_repetitions, time_limit):
+    def openLoadCustomObject(self):
+	self.loadCustomObject.show()
+
+    def updateExerciseParams(self, width, height, color, number_of_repetitions, time_limit, calibration_duration):
 	self.exercise_width = width
         self.exercise_height = height
         self.exercise_color = color
+	self.exercise_custom_color = None
         self.exercise_number_of_repetitions = number_of_repetitions
         self.exercise_time_limit = time_limit
+	self.eexercise_calibration_duration = calibration_duration
+
+    def updateCustomColor(self, custom_color):
+	self.exercise_custom_color = custom_color
 
     def closeEvent(self, event):
         reply = QtGui.QMessageBox.question(self, 'Message',
