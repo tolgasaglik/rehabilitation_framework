@@ -7,12 +7,12 @@
 # WARNING! All changes made in this file will be lost!
 
 from PyQt4 import QtCore, QtGui
-from PyQt4.QtCore import QThread
+from PyQt4.QtCore import QThread, QRectF, Qt
 from subprocess import Popen,PIPE
-from PyQt4.QtGui import QWidget
+from PyQt4.QtGui import QWidget, QTabWidget, QLabel, QImage, QPixmap, QGraphicsScene, QGraphicsPixmapItem
 import os,sys,inspect
-from threading import Thread
-from time import sleep
+#from threading import Thread
+#from time import sleep
 import roslaunch
 import rospy
 # include parent "src" directory to sys.path, otherwise import won't work
@@ -23,26 +23,25 @@ sys.path.insert(0,parentdir)
 from PyQt4 import uic
 import Exercises
 from Exercises import Color,Limb,RotationType,MotionType
-import Preferences
-import LoadCustomObject
+import DefineNewColor
 
 class QTRehaZenterGUI(QtGui.QMainWindow):
     def __init__(self):
 	super(QTRehaZenterGUI, self).__init__()
 	uic.loadUi('ui_files/QTRehaZenterGUI.ui', self)
 
-	# initialize exercise parameters
-	self.exercise_width = 640
-        self.exercise_height = 480
-        self.exercise_color = "yellow"
-	self.exercise_custom_color = None
-        self.exercise_number_of_repetitions = 10
-        self.exercise_time_limit = 0
-	self.exercise_calibration_duration = 5
+	# initialize custom object loader widget
+	self.defineNewColorWidget = DefineNewColor.UIDefineNewColorWidget(self)
 
-	# initialize other widgets
-	self.preferences = Preferences.UIPreferencesWidget(self)
-	self.loadCustomObject = LoadCustomObject.UILoadCustomObjectWidget(self)
+	# load logo images
+	uniLuLogoScene = QGraphicsScene()
+	imagePixmap_unilu = QGraphicsPixmapItem(QPixmap(QImage("imgs/university_of_luxembourg_logo.png")), None, uniLuLogoScene)
+	self.grUniLuLogo.setScene(uniLuLogoScene)
+	self.grUniLuLogo.fitInView(uniLuLogoScene.sceneRect(), Qt.KeepAspectRatio)
+	rehaZenterLogoScene = QGraphicsScene()
+	imagePixmap_reha = QGraphicsPixmapItem(QPixmap(QImage("imgs/rehazenter_logo.jpg")), None, rehaZenterLogoScene)
+	self.grRehaZenterLogo.setScene(rehaZenterLogoScene)
+	self.grRehaZenterLogo.fitInView(rehaZenterLogoScene.sceneRect(), Qt.KeepAspectRatio)
 
 	# connect functions to buttons
 	self.btnInternalRotationExercise.clicked.connect(self.btnInternalRotationExerciseClicked)
@@ -51,9 +50,8 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	self.btnFlexionMotionExercise.clicked.connect(self.btnFlexionMotionExerciseClicked)
 	self.btnBegin.clicked.connect(self.btnBeginClicked)
 	self.btnStop.clicked.connect(self.btnStopClicked)
+	self.btnDefineNewColor.clicked.connect(self.openDefineNewColorWidget)
 	self.actionQuit.triggered.connect(self.closeEvent)
-	self.actionPreferences.triggered.connect(self.openPreferences)
-	self.actionLoadCustomObject.triggered.connect(self.openLoadCustomObject)
 
 
     # *******************************************************************************************
@@ -109,7 +107,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         #uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
         #roslaunch.configure_logging(uuid)
 	launch_params = ['roslaunch', 'reha_game', 'Exercise_Launcher.launch']
-	launch_params.extend(('width:='+str(self.exercise_width), 'height:='+str(self.exercise_height), 'color:='+self.exercise_color, 'number_of_repetitions:='+str(self.exercise_number_of_repetitions), "time_limit:="+str(self.exercise_time_limit)))
+	launch_params.extend(('width:='+str(self.spnWidth.value()), 'height:='+str(self.spnHeight.value()), 'color:=yellow', 'number_of_repetitions:='+str(self.spnNbrRepetitions.value()), "time_limit:="+str(self.spnTimeLimit.value()), 'calibration_duration:='+str(self.spnCalibDuration.value())))
 	#if self.btnFlexionMotionExercise.isChecked():
         #self.launcher = roslaunch.parent.ROSLaunchParent(uuid, ["./../../launch/Exercise_Launcher.launch"])
 	self.exercise_process = Popen(launch_params)
@@ -144,20 +142,8 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
     def appendToTextView(self, line):
 	self.txtViewLogOutput.appendPlainText(line)
 
-    def openPreferences(self):
-	self.preferences.show()
-
-    def openLoadCustomObject(self):
-	self.loadCustomObject.show()
-
-    def updateExerciseParams(self, width, height, color, number_of_repetitions, time_limit, calibration_duration):
-	self.exercise_width = width
-        self.exercise_height = height
-        self.exercise_color = color
-	self.exercise_custom_color = None
-        self.exercise_number_of_repetitions = number_of_repetitions
-        self.exercise_time_limit = time_limit
-	self.eexercise_calibration_duration = calibration_duration
+    def openDefineNewColorWidget(self):
+	self.defineNewColorWidget.show()
 
     def updateCustomColor(self, custom_color):
 	self.exercise_custom_color = custom_color
@@ -174,7 +160,6 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 		event.accept()
         else:
 		event.ignore()
-
     # *******************************************************************************************
 
 if __name__ == "__main__":
