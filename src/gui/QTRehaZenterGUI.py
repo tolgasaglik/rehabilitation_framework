@@ -9,7 +9,7 @@
 from PyQt4 import QtCore, QtGui
 from PyQt4.QtCore import QThread, QRectF, Qt
 from subprocess import Popen,PIPE
-from PyQt4.QtGui import QWidget, QTabWidget, QLabel, QImage, QPixmap, QGraphicsScene, QGraphicsPixmapItem
+from PyQt4.QtGui import QWidget, QTabWidget, QLabel, QImage, QPixmap, QGraphicsScene, QGraphicsPixmapItem, QHeaderView, QTableWidgetItem
 import os,sys,inspect
 #from threading import Thread
 #from time import sleep
@@ -43,7 +43,27 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	self.grRehaZenterLogo.setScene(rehaZenterLogoScene)
 	self.grRehaZenterLogo.fitInView(rehaZenterLogoScene.sceneRect(), Qt.KeepAspectRatio)
 
-	# connect functions to buttons
+	# initialize list of faces (in string form)
+	self._faces_list = ["sad", "happy", "crying"]
+	self.cmbFaces.addItems(self._faces_list)
+
+	# disable various labels and widgets on startup
+	self.lblPerRepetitions1.setEnabled(False)
+	self.lblPerRepetitions2.setEnabled(False)
+	self.spnQuantEncRep.setEnabled(False)
+	self.btnDeleteLine.setEnabled(False)
+	self.spnFixedReps.setEnabled(False)
+	self.spnFrequencyReps.setEnabled(False)
+	self.btnAddLine.setEnabled(False)
+
+	# resize table columns to match their text size
+	self.tblFacialFeedback.setColumnCount(3)
+	header = self.tblFacialFeedback.horizontalHeader()
+	header.setResizeMode(0, QHeaderView.Stretch)
+	header.setResizeMode(1, QHeaderView.Stretch)
+	header.setResizeMode(2, QHeaderView.Stretch)
+
+	# connect functions to widgets
 	self.btnInternalRotationExercise.clicked.connect(self.btnInternalRotationExerciseClicked)
 	self.btnExternalRotationExercise.clicked.connect(self.btnExternalRotationExerciseClicked)
 	self.btnAbductionMotionExercise.clicked.connect(self.btnAbductionMotionExerciseClicked)
@@ -51,7 +71,15 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	self.btnBegin.clicked.connect(self.btnBeginClicked)
 	self.btnStop.clicked.connect(self.btnStopClicked)
 	self.btnDefineNewColor.clicked.connect(self.openDefineNewColorWidget)
+	self.slNbrBlocks.valueChanged.connect(self.slNbrBlocksValueChanged)
+	self.rdFixed.clicked.connect(self.rdFixedClicked)
+	self.rdFrequency.clicked.connect(self.rdFrequencyClicked)
+	self.chkQuantitative.clicked.connect(self.chkQuantitativeClicked)
+	self.btnAddLine.clicked.connect(self.btnAddLineClicked)
+	self.cmbFaces.currentIndexChanged.connect(self.cmbFacesCurrentIndexChanged)
 	self.actionQuit.triggered.connect(self.closeEvent)
+	self.btnDeleteLine.clicked.connect(self.btnDeleteLineClicked)
+	self.tblFacialFeedback.itemClicked.connect(self.tblFacialFeedbackItemClicked)
 
 
     # *******************************************************************************************
@@ -139,14 +167,69 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	self.btnStop.setEnabled(False)
 	self.txtViewLogOutput.appendPlainText("********************* END EXERCISE *********************")
 
+    def chkQuantitativeClicked(self):
+	self.chkQuantitative.setEnabled(not self.chkQuantitative.isChecked())
+
+    def rdFixedClicked(self):
+	self.spnFrequencyReps.setEnabled(False)
+	self.spnFixedReps.setEnabled(True)
+	if self.cmbFaces.currentIndex() > -1:
+		self.btnAddLine.setEnabled(True)
+	else:
+		self.btnAddLine.setEnabled(False)	
+
+    def rdFrequencyClicked(self):
+	self.spnFrequencyReps.setEnabled(True)
+	self.spnFixedReps.setEnabled(False)
+	if self.cmbFaces.currentIndex() > -1:
+		self.btnAddLine.setEnabled(True)
+	else:
+		self.btnAddLine.setEnabled(False)
+
+    def btnDeleteLineClicked(self):
+	self.tblFacialFeedback.removeRow(self.tblFacialFeedback.currentRow())
+	self.btnDeleteLine.setEnabled(False)
+	
+
+    def tblFacialFeedbackItemClicked(self):
+	self.btnDeleteLine.setEnabled(True)
+
+    def btnAddLineClicked(self):
+	self.tblFacialFeedback.insertRow(self.tblFacialFeedback.rowCount())
+	if self.rdFixed.isChecked():
+		typeText = "fixed"
+		repetitionsText = str(self.spnFixedReps.value())
+	elif self.rdFrequency.isChecked():
+		typeText = "frequency"
+		repetitionsText = str(self.spnFrequencyReps.value())
+	else:
+		raise Exception("error when selecting facial feedback, this is not supposed to happen...")
+	faceText = self.cmbFaces.currentText()
+	self.tblFacialFeedback.setItem(self.tblFacialFeedback.rowCount()-1, 0, QTableWidgetItem(typeText))
+	self.tblFacialFeedback.setItem(self.tblFacialFeedback.rowCount()-1, 1, QTableWidgetItem(repetitionsText))
+	self.tblFacialFeedback.setItem(self.tblFacialFeedback.rowCount()-1, 2, QTableWidgetItem(faceText))
+	self.spnFixedReps.setEnabled(False)
+	self.spnFrequencyReps.setEnabled(False)
+	self.rdFixed.setChecked(False)
+	self.rdFrequency.setChecked(False)
+	self.cmbFaces.setCurrentIndex(-1)
+	self.btnAddLine.setEnabled(False)
+
     def appendToTextView(self, line):
 	self.txtViewLogOutput.appendPlainText(line)
+
+    def cmbFacesCurrentIndexChanged(self):
+	if self.rdFixed.isChecked() or self.rdFrequency.isChecked():
+		self.btnAddLine.setEnabled(True)
 
     def openDefineNewColorWidget(self):
 	self.defineNewColorWidget.show()
 
     def updateCustomColor(self, custom_color):
 	self.exercise_custom_color = custom_color
+
+    def slNbrBlocksValueChanged(self):
+	self.lblNbrBlocksValue.setText(str(self.slNbrBlocks.value()))
 
     def closeEvent(self, event):
         reply = QtGui.QMessageBox.question(self, 'Message',
