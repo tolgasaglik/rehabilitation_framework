@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 import rospy
-from reha_game.msg import *
-from reha_game.srv import *
-from std_msgs.msg import String
+from rehabilitation_framework.msg import *
+from rehabilitation_framework.srv import *
+from std_msgs.msg import Bool
 from Exercises import MotionType, RotationType, SimpleMotionExercise, RotationExercise
 
-class ROSServer(object):
+class RosServer(object):
 	def __init__(self):
 		# initialize properties
 		self._exercise_instance = None
@@ -15,7 +15,7 @@ class ROSServer(object):
 		rospy.init_node("reha_listener", anonymous=True)
 		rospy.Subscriber("exercise_init", ExerciseInit, self._exercise_init_callback)
 		rospy.Service("calibrate", Calibration, self._calibrate_callback)
-		rospy.Subscriber("exercise_stop", bool, self._exercise_stop_callback)
+		rospy.Subscriber("exercise_stop", Bool, self._exercise_stop_callback)
 
 		# spin() simply keeps python from exiting until this node is stopped
 		rospy.spin()
@@ -76,3 +76,6 @@ class ROSServer(object):
         			self._exercise_instance.wait()
         			self._exercise_instance = None
 				rospy.loginfo("Exercise terminated successfully!")
+
+if __name__ == "__main__":
+	server = RosServer()

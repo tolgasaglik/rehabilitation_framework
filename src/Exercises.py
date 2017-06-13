@@ -6,7 +6,7 @@ import signal
 import numpy as np
 import sys
 import argparse
-import roslib; roslib.load_manifest('reha_game')
+import roslib; roslib.load_manifest('rehabilitation_framework')
 import rospy
 import ast
 import roslaunch
@@ -19,7 +19,7 @@ from subprocess import Popen,PIPE,STDOUT
 from threading import Thread
 from time import sleep
 import signal
-from reha_game.msg import ExerciseInit,CalibrationData
+from rehabilitation_framework.msg import * 
 
 #                 |y=-0.1
 #        D        |      A
@@ -69,7 +69,7 @@ def process_args(argv):
 	return exercise
 
 class VideoReader(Thread):
-	def __init__(self, camera_resolution=(640,480), color_thresholds):
+	def __init__(self, color_thresholds, camera_resolution=(640,480)):
 		# Initialize camera and get actual resolution
 		Thread.__init__(self)
                 self.camera_resolution = camera_resolution
@@ -283,6 +283,9 @@ class EncouragerUnit(object):
 		self.load_sentences()
 		self._repetitions_limit = repetitions_limit
 
+	def reset_repetitions_counter(self):
+		self._repetitions_counter = 0
+
 	def load_sentences(self):
 		# retrieve path to reha_game ROS package and load sentences file
 		rospack = rospkg.RosPack()
@@ -367,7 +370,7 @@ class Timer(Thread):
 class Exercise:
 	__metaclass__ = ABCMeta
 
-	def __init__(self, repetitions_limit=10, calibration_duration=10, calibration_output_file="", camera_resolution=(640,480), hsv_thresholds=((35, 255, 255),(15, 210, 20)), time_limit=0, spawn_ros_nodes=False, robot_position=RobotPosition.LEFT):
+	def __init__(self, number_of_blocks=1, repetitions_limit=10, calibration_duration=10, calibration_output_file="", camera_resolution=(640,480), hsv_thresholds=((35, 255, 255),(15, 210, 20)), time_limit=0, spawn_ros_nodes=False, robot_position=RobotPosition.LEFT):
 		self.repetitions_limit = repetitions_limit
 		self.calibration_duration = calibration_duration
 		if calibration_duration > 0:
@@ -376,7 +379,8 @@ class Exercise:
 		self.calibration_output_file = calibration_output_file
 		#self.calibration_file = calibration_file
 		self.camera_resolution = camera_resolution
-		self.limb = Limb.LEFT_ARM 
+		self.limb = Limb.LEFT_ARM
+		self._number_of_blocks = number_of_blocks
 		self.robot_position = robot_position
 		self.time_limit = time_limit
 		self._spawn_nodes = spawn_ros_nodes
@@ -516,28 +520,47 @@ class Exercise:
 
 		# Main loop
 		index=0
+		current_block=1
 		self._encourager.say("You may begin your exercise now!")
 		#timer = None
 		if self.time_limit > 0:
 			timer = Timer(self.time_limit)
 			timer.start()
-		while self._encourager.repetitions < self._encourager.repetitions_limit or (self.time_limit > 0 and timer.is_alive()):
+		while self.time_limit > 0 and timer.is_alive():
 			# check if hand movement thresholds have been reached and count repetitions accordingly
 			if self._video_reader.center != None :
-				if abs(self._video_reader.center[0]-(self._calibration_points[index])[0]) < self._tolerance_x and abs(self._video_reader.center[1]-(self._calibration_points[index])[1]) < self._tolerance_y :
+				if (self._limb == Limb.LEFT_ARM and abs(self._video_reader.center[0]-(self._calibration_points_left_arm[index])[0]) < self._tolerance_x and abs(self._video_reader.center[1]-(self._calibration_points_left_arm[index])[1]) < self._tolerance_y) or (self._limb == Limb.RIGHT_ARM and abs(self._video_reader.center[0]-(self._calibration_points_right_arm[index])[0]) < self._tolerance_x and abs(self._video_reader.center[1]-(self._calibration_points_right_arm[index])[1]) < self._tolerance_y):
 					index += 1
-					if index == len(self._calibration_points):
+					# NOTE: both point arrays have the same number of elements, so it doesn't matter which array size we take for the condition below
+					if index == len(self._calibration_points_left_arm):
 						index = 0
 						self._encourager.inc_repetitions_counter()
+						if self_encourager.repetitions == self._encourager.repetitions_limit:
+							current_block += 1
+							self._encourager.say("Block " + str(current_block) + " finished!")
+							if current_block < self._number_of_blocks:
+								self._encourager.say("Take a 20 seconds break.")
+								sleep(20)
+								self._encourager.reset_repetitions_counter()
+								enc_sentence = "Now, continue your exercise with your "
+								if self._limb == Limb.LEFT_ARM:
+									self._limb = Limb.RIGHT_ARM
+									enc_sentence += "right arm."
+								else:
+									self._limb = Limb.LEFT_ARM
+									enc_sentence += "left arm."
+								self._encourager.say(enc_sentence)
+							else:
+								break
 							
 			# display images and quit loop if "q"-key was pressed
-			cv2.imshow("Original image", self._video_reader.img_original)
-			cv2.imshow("Detected blobs", self._video_reader.img_modified)
+			#cv2.imshow("Original image", self._video_reader.img_original)
+			#cv2.imshow("Detected blobs", self._video_reader.img_modified)
 
 			# check termination conditions
-			if cv2.waitKey(1) & 0xFF == ord('q'):
-				break
-			elif self.time_limit > 0 and not timer.is_alive():
+			#if cv2.waitKey(1) & 0xFF == ord('q'):
+			#	break
+			if self.time_limit > 0 and not timer.is_alive():
 				break
 
 		# kill video reader and timer threads
@@ -548,6 +571,7 @@ class Exercise:
 		print "Video reader terminated!"
 		if self.time_limit > 0:
 			if timer.is_alive():
+				self._encourager.say("Congratulations! You have completed all of the blocks.")
 				timer.kill_timer()
 				timer.join()
 			else:
@@ -564,8 +588,8 @@ class Exercise:
 
 # exercise that counts circular movements performed on the table surface
 class RotationExercise(Exercise):
-	def __init__(self, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), color_file="", limb=Limb.LEFT_ARM, time_limit=0, spawn_ros_nodes=False, rotation_type=RotationType.INTERNAL, robot_position=RobotPosition.LEFT):
-		super(RotationExercise, self).__init__(repetitions_limit, calibration_duration, camera_resolution, color_file, limb, time_limit, spawn_ros_nodes, robot_position)
+	def __init__(self, repetitions_limit=10, number_of_blocks=1, calibration_duration=10, camera_resolution=(640,480), hsv_thresholds=((35, 255, 255),(15, 210, 20)), time_limit=0, spawn_ros_nodes=False, rotation_type=RotationType.INTERNAL, robot_position=RobotPosition.LEFT):
+		super(RotationExercise, self).__init__(repetitions_limit, calibration_duration, camera_resolution, hsv_thresholds, time_limit, spawn_ros_nodes, robot_position)
 		self._rotation_type = rotation	
 
 	@property
@@ -584,8 +608,8 @@ class RotationExercise(Exercise):
 
 # exercise that counts simple movements with 2 or 3 point coordinates performed on the table surface
 class SimpleMotionExercise(Exercise):
-	def __init__(self, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), limb=Limb.LEFT_ARM, time_limit=0, spawn_ros_nodes=False, motion_type=MotionType.FLEXION, robot_position=RobotPosition.LEFT):
-		super(SimpleMotionExercise, self).__init__(repetitions_limit, calibration_duration, camera_resolution, color_file, limb, time_limit, spawn_ros_nodes, robot_position)
+	def __init__(self, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), hsv_thresholds=((35, 255, 255),(15, 210, 20)), time_limit=0, spawn_ros_nodes=False, motion_type=MotionType.FLEXION, robot_position=RobotPosition.LEFT):
+		super(SimpleMotionExercise, self).__init__(repetitions_limit, calibration_duration, camera_resolution, hsv_thresholds, time_limit, spawn_ros_nodes, robot_position)
 		self._motion_type = motion_type
 
 	@property
@@ -701,11 +725,11 @@ class SimpleMotionExercise(Exercise):
 
 
 			# display images and quit loop if "q"-key was pressed
-			cv2.imshow("Original image", self._video_reader.img_original)
-			cv2.imshow("Detected blobs", self._video_reader.img_modified)
-			if cv2.waitKey(1) & 0xFF == ord('q'):
-				self._video_reader.set_kill_thread()
-				self._video_reader.join()
+			#cv2.imshow("Original image", self._video_reader.img_original)
+			#cv2.imshow("Detected blobs", self._video_reader.img_modified)
+			#if cv2.waitKey(1) & 0xFF == ord('q'):
+			#	self._video_reader.set_kill_thread()
+			#	self._video_reader.join()
 			if not self._video_reader.is_alive():
 				if timer != None:
 					timer.kill_timer()
@@ -713,33 +737,6 @@ class SimpleMotionExercise(Exercise):
 				cv2.destroyAllWindows()
 				return 2
 		self._encourager.say("Calibration completed!")
-
-		# publish calibration data to GUI application
-		pub = rospy.Publisher('exercise_calibration_data', CalibrationData, queue_size=1)
-		calibration_data = CalibrationData()
-		calibration_data.robot_position = self.robot_position
-		calibration_data.motion_type = self.motion_type
-		calibration_data.rotation_type = self.rotation_type
-		calibration_data.limb = self.limb
-		calibration_data.calibration_duration = self.calibration_duration
-		calibration_data.max_hue = self._video_reader.hsv_color_thresholds[0][0]
-		calibration_data.max_sat = self._video_reader.hsv_color_thresholds.color_hsv_max[0][1]
-		calibration_data.max_value = self._video_reader.hsv_color_thresholds.color_hsv_max[0][2]
-		calibration_data.min_hue = self._video_reader.hsv_color_thresholds.color_hsv_min[1][0]
-		calibration_data.min_sat = self._video_reader.hsv_color_thresholds.color_hsv_min[1][1]
-		calibration_data.min_value = self._video_reader.hsv_color_thresholds.color_hsv_min[1][2]
-		calibration_data.coordinates_left_arm = []
-		for point in self._calibration_points_left_arm:
-			temp_point = CalibrationPoint()
-			temp_point.x = point[0]
-			temp_point.y = point[1]
-			calibration_data.coordinates_left_arm.append(temp_point)
-		for point in self._calibration_points_right_arm:
-			temp_point = CalibrationPoint()
-			temp_point.x = point[0]
-			temp_point.y = point[1]
-			calibration_data.coordinates_right_arm.append(temp_point)
-		pub.publish(calibration_data)
 		return 0
 
 #class ConesExercise(Exercise)

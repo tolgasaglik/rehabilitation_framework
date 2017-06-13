@@ -36,7 +36,7 @@
        </sizepolicy>
       </property>
       <property name="currentIndex">
-       <number>3</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="tabWelcome">
        <attribute name="title">
@@ -985,14 +985,14 @@ selected line</string>
             </widget>
            </item>
            <item row="3" column="0">
-            <widget class="QLabel" name="label">
+            <widget class="QLabel" name="lblRobotPosition">
              <property name="text">
               <string>Robot position:</string>
              </property>
             </widget>
            </item>
            <item row="3" column="1">
-            <widget class="QComboBox" name="comboBox">
+            <widget class="QComboBox" name="cmbRobotPosition">
              <property name="minimumSize">
               <size>
                <width>200</width>
@@ -1079,6 +1079,22 @@ selected line</string>
              </item>
             </layout>
            </item>
+           <item row="8" column="2">
+            <spacer name="vSpacer2">
+             <property name="orientation">
+              <enum>Qt::Vertical</enum>
+             </property>
+             <property name="sizeType">
+              <enum>QSizePolicy::Fixed</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>20</width>
+               <height>12</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
            <item row="10" column="2">
             <layout class="QHBoxLayout" name="hzlCalibrateNow">
              <property name="spacing">
@@ -1111,36 +1127,7 @@ selected line</string>
                </item>
               </widget>
              </item>
-             <item>
-              <widget class="QPushButton" name="btnCalibrateNow">
-               <property name="sizePolicy">
-                <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
-                 <horstretch>0</horstretch>
-                 <verstretch>0</verstretch>
-                </sizepolicy>
-               </property>
-               <property name="text">
-                <string>Calibrate now!</string>
-               </property>
-              </widget>
-             </item>
             </layout>
-           </item>
-           <item row="8" column="2">
-            <spacer name="vSpacer2">
-             <property name="orientation">
-              <enum>Qt::Vertical</enum>
-             </property>
-             <property name="sizeType">
-              <enum>QSizePolicy::Fixed</enum>
-             </property>
-             <property name="sizeHint" stdset="0">
-              <size>
-               <width>20</width>
-               <height>12</height>
-              </size>
-             </property>
-            </spacer>
            </item>
            <item row="3" column="0" colspan="2">
             <widget class="QLabel" name="lblColorFile">
@@ -1251,6 +1238,19 @@ selected line</string>
              </property>
              <property name="indent">
               <number>0</number>
+             </property>
+            </widget>
+           </item>
+           <item row="11" column="2">
+            <widget class="QPushButton" name="btnCalibrateNow">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="text">
+              <string>Calibrate now for current settings...</string>
              </property>
             </widget>
            </item>

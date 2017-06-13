@@ -8,11 +8,8 @@
 
 from PyQt4 import QtCore, QtGui
 from PyQt4.QtCore import QThread, QRectF, Qt
-from subprocess import Popen,PIPE
 from PyQt4.QtGui import QMessageBox, QFileDialog, QWidget, QTabWidget, QLabel, QImage, QPixmap, QGraphicsScene, QGraphicsPixmapItem, QHeaderView, QTableWidgetItem
 import os,sys,inspect
-#from threading import Thread
-#from time import sleep
 import roslaunch
 import rospy
 # include parent "src" directory to sys.path, otherwise import won't work
@@ -23,7 +20,29 @@ sys.path.insert(0,parentdir)
 from PyQt4 import uic
 import Exercises
 from Exercises import Limb,RotationType,MotionType,RobotPosition
+from rehabilitation_framework.msg import *
+from rehabilitation_framework.srv import *
 import DefineNewColor
+
+def load_color_file(filename):
+	color_fileptr = open(filename, "r")
+	hsv_thresholds = HSVThresholds()
+	for line in color_fileptr.readLines():
+		if line.startsWith("max_hue="):
+			hsv_thresholds.max_hue = int(line[8:])
+		if line.startsWith("max_sat="):
+			hsv_thresholds.max_sat = int(line[8:])
+		if line.startsWith("max_value="):
+			hsv_thresholds.max_value = int(line[10:])
+		if line.startsWith("min_hue="):
+			hsv_thresholds.min_hue = int(line[8:])
+		if line.startsWith("min_sat="):
+			hsv_thresholds.min_sat = int(line[8:])
+		if line.startsWith("min_value="):
+			hsv_thresholds.min_value = int(line[10:])
+	color_fileptr.close()
+	return hsv_thresholds
+
 
 class QTRehaZenterGUI(QtGui.QMainWindow):
     def __init__(self):
@@ -60,6 +79,14 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	self.dlgSaveCalibFile.setFileMode(QFileDialog.AnyFile)
 	self.dlgSaveCalibFile.setFilter("Calibration files (*.cal)")
 	self.dlgSaveCalibFile.setAcceptMode(QFileDialog.AcceptSave)
+
+	# initialize rotation exercises warning message box
+	self.msgRotationExercises = QMessageBox()
+	self.msgRotationExercises.setIcon(QMessageBox.Warning)
+	self.msgRotationExercises.setText("Sorry, rotation exercises have not been implemented yet!")
+	self.msgRotationExercises.setInformativeText("Please choose one of the motion exercises instead until rotation exercises become available.")
+	self.msgRotationExercises.setWindowTitle("Rotation exercises warning")
+	self.msgRotationExercises.setStandardButtons(QMessageBox.Ok)
 
 	# initialize list of faces (in string form)
 	self._faces_list = ["sad", "happy", "crying"]
@@ -147,13 +174,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
     def btnBeginClicked(self):
 	# rotation exercises have not been implemented yet...
 	if not self.btnInternalRotationExercise.isEnabled() or not self.btnExternalRotationExercise.isEnabled():
-		msg = QMessageBox()
-		msg.setIcon(QMessageBox.Warning)
-		msg.setText("Sorry, rotation exercises have not been implemented yet!")
-		msg.setInformativeText("Please choose one of the motion exercises instead until rotation exercises become available.")
-		msg.setWindowTitle("Rotation exercises warning")
-		msg.setStandardButtons(QMessageBox.Ok)
-		msg.exec_()
+		self.msgRotationExercises.exec_()
 		return
 
 	# disable all other buttons while the chosen exercise is running
@@ -186,10 +207,9 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	msg.rotation_type = 0
 	
 
-	if self.btnFlexionMotionExercise.isChecked():
+	#if self.btnFlexionMotionExercise.isChecked():
 		#launch_params.extend(('motion_type:=0'))
-		
-	elif self.btnAbductionMotionExercise.isChecked():
+	#elif self.btnAbductionMotionExercise.isChecked():
 		#launch_params.extend(('motion_type:=1'))
 	#self.exercise_process = Popen(launch_params)
 
@@ -247,17 +267,50 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 
     def btnCalibrateNowClicked(self):
 	if self.dlgSaveCalibFile.exec_():
-		# TODO: publish calibration request to service
+		# create calibration service request message
+		request = CalibrationRequest()
+		if str(self.cmbCreateCalibFileFor.currentText()) == "flexion exercise":
+			request.motion_type = 1
+			request.rotation_type = 0
+		elif str(self.cmbCreateCalibFileFor.currentText()) == "abduction exercise":
+			request.motion_type = 1
+			request.rotation_type = 0
+		else:
+			self.msgRotationExercises.exec_()
+			return
+		try:
+			request.hsv_thresholds = load_color_file(str(self.lnColorFile.text()))
+		except IOError:
+			# TODO: maybe show error in dialog box instead?
+			print "Color file could not be read!"
+			return
+		except ValueError:
+			# TODO: maybe show error in dialog box instead?
+			print "Color file has invalid contents!"
+			return
+		request.robot_position = self.cmbRobotPosition.currentIndex()
+		request.calibration_duration = self.spnCalibDuration.value()
+		request.camera_width = self.spnWidth.value()
+		request.camera_height = self.spnHeight.value()
+
+		# publish request to service
+		rospy.wait_for_service('calibrate')
+		try:
+			calibrate = rospy.ServiceProxy('calibrate', Calibration)
+			response = calibrate(request)
+		except rospy.ServiceException, e:
+			# TODO: maybe show error in dialog box instead?
+			print "Service call failed: %s"%e
+			return
 
 		# write calibration points to file
-		calib_fileptr = open(self.calibration_output_file, "w")
-		calib_fileptr.write("motion_type=" + str(self.motion_type) + "\n")
-		calib_fileptr.write("rotation_type=" + str(self.rotation_type) + "\n")
-		calib_fileptr.write("robot_position=" + str(self.robot_position) + "\n")
-		calib_fileptr.write("limb=" + str(self.limb) + "\n")
-		calib_fileptr.write("calibration_points_left_arm=" + str(self._calibration_points_left_arm)+ "\n")
-		calib_fileptr.write("calibration_points_right_arm=" + str(self._calibration_points_right_arm)+ "\n")
-		calib_fileptr.close()	
+		calib_fileptr = open(self.dlgSaveCalibFile.selectedFiles()[0], "w")
+		calib_fileptr.write("motion_type=" + str(request.motion_type) + "\n")
+		calib_fileptr.write("rotation_type=" + str(request.rotation_type) + "\n")
+		calib_fileptr.write("robot_position=" + str(request.robot_position) + "\n")
+		calib_fileptr.write("calibration_points_left_arm=" + str(response.calibration_points_left_arm)+ "\n")
+		calib_fileptr.write("calibration_points_right_arm=" + str(response.calibration_points_right_arm)+ "\n")
+		calib_fileptr.close()
 	
 
     def tblFacialFeedbackItemClicked(self):
