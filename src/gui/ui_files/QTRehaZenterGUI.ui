@@ -36,7 +36,7 @@
        </sizepolicy>
       </property>
       <property name="currentIndex">
-       <number>0</number>
+       <number>3</number>
       </property>
       <widget class="QWidget" name="tabWelcome">
        <attribute name="title">
@@ -72,8 +72,8 @@
        <widget class="QGraphicsView" name="grUniLuLogo">
         <property name="geometry">
          <rect>
-          <x>0</x>
-          <y>530</y>
+          <x>6</x>
+          <y>545</y>
           <width>161</width>
           <height>121</height>
          </rect>
@@ -89,7 +89,7 @@
         <property name="geometry">
          <rect>
           <x>460</x>
-          <y>530</y>
+          <y>545</y>
           <width>171</width>
           <height>121</height>
          </rect>
@@ -531,13 +531,6 @@
           </layout>
          </widget>
         </item>
-        <item row="1" column="0">
-         <widget class="Line" name="line_4">
-          <property name="orientation">
-           <enum>Qt::Horizontal</enum>
-          </property>
-         </widget>
-        </item>
         <item row="2" column="0">
          <widget class="QGroupBox" name="grpVocalEncouragement">
           <property name="sizePolicy">
@@ -602,7 +595,7 @@
             </widget>
            </item>
            <item row="0" column="0">
-            <widget class="QCheckBox" name="chkQualtitative">
+            <widget class="QCheckBox" name="chkQualitative">
              <property name="sizePolicy">
               <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
                <horstretch>0</horstretch>
@@ -614,7 +607,73 @@
              </property>
             </widget>
            </item>
+           <item row="1" column="0">
+            <layout class="QHBoxLayout" name="horizontalLayout_4">
+             <item>
+              <spacer name="hspQualiEnc">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>60</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item>
+              <widget class="QComboBox" name="cmbQualiEnc">
+               <property name="minimumSize">
+                <size>
+                 <width>170</width>
+                 <height>0</height>
+                </size>
+               </property>
+               <property name="maximumSize">
+                <size>
+                 <width>170</width>
+                 <height>16777215</height>
+                </size>
+               </property>
+               <property name="layoutDirection">
+                <enum>Qt::LeftToRight</enum>
+               </property>
+               <property name="maxVisibleItems">
+                <number>2</number>
+               </property>
+               <property name="maxCount">
+                <number>2</number>
+               </property>
+               <item>
+                <property name="text">
+                 <string>high</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>low</string>
+                </property>
+               </item>
+              </widget>
+             </item>
+            </layout>
+           </item>
           </layout>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="Line" name="line_4">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="0">
+         <widget class="Line" name="line_5">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
          </widget>
         </item>
         <item row="4" column="0">
@@ -715,7 +774,7 @@
               </widget>
              </item>
              <item row="0" column="3">
-              <spacer name="facialFeedbackButtonSpacer">
+              <spacer name="hspFacialFeedback">
                <property name="orientation">
                 <enum>Qt::Horizontal</enum>
                </property>
@@ -839,13 +898,6 @@ selected line</string>
           </layout>
          </widget>
         </item>
-        <item row="3" column="0">
-         <widget class="Line" name="line_5">
-          <property name="orientation">
-           <enum>Qt::Horizontal</enum>
-          </property>
-         </widget>
-        </item>
        </layout>
       </widget>
       <widget class="QWidget" name="tabApplicationPreferences">
@@ -862,7 +914,7 @@ selected line</string>
            </sizepolicy>
           </property>
           <property name="title">
-           <string>Camera settings</string>
+           <string>Robot settings</string>
           </property>
           <property name="flat">
            <bool>false</bool>
@@ -872,7 +924,7 @@ selected line</string>
             <widget class="QSpinBox" name="spnHeight">
              <property name="maximumSize">
               <size>
-               <width>120</width>
+               <width>90</width>
                <height>40</height>
               </size>
              </property>
@@ -891,7 +943,7 @@ selected line</string>
             <widget class="QSpinBox" name="spnWidth">
              <property name="maximumSize">
               <size>
-               <width>120</width>
+               <width>90</width>
                <height>40</height>
               </size>
              </property>
@@ -915,7 +967,7 @@ selected line</string>
               </sizepolicy>
              </property>
              <property name="text">
-              <string>Width:</string>
+              <string>Camera width:</string>
              </property>
             </widget>
            </item>
@@ -928,8 +980,46 @@ selected line</string>
               </sizepolicy>
              </property>
              <property name="text">
-              <string>Height:</string>
+              <string>Camera height:</string>
              </property>
+            </widget>
+           </item>
+           <item row="3" column="0">
+            <widget class="QLabel" name="label">
+             <property name="text">
+              <string>Robot position:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="3" column="1">
+            <widget class="QComboBox" name="comboBox">
+             <property name="minimumSize">
+              <size>
+               <width>200</width>
+               <height>0</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>200</width>
+               <height>16777215</height>
+              </size>
+             </property>
+             <item>
+              <property name="text">
+               <string>left of the table</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>center of the table</string>
+              </property>
+             </item>
+             <item>
+              <property name="text">
+               <string>right of the table</string>
+              </property>
+             </item>
             </widget>
            </item>
           </layout>
@@ -950,7 +1040,11 @@ selected line</string>
            <item row="3" column="2">
             <layout class="QHBoxLayout" name="hzlColorFile">
              <item>
-              <widget class="QLineEdit" name="lineEdit"/>
+              <widget class="QLineEdit" name="lnColorFile">
+               <property name="readOnly">
+                <bool>true</bool>
+               </property>
+              </widget>
              </item>
              <item>
               <widget class="QPushButton" name="btnLoadColorFile">
@@ -967,29 +1061,14 @@ selected line</string>
              </item>
             </layout>
            </item>
-           <item row="0" column="0" colspan="2">
-            <widget class="QLabel" name="lblCalibDuration">
-             <property name="sizePolicy">
-              <sizepolicy hsizetype="Maximum" vsizetype="Preferred">
-               <horstretch>0</horstretch>
-               <verstretch>0</verstretch>
-              </sizepolicy>
-             </property>
-             <property name="text">
-              <string>Calibration duration:</string>
-             </property>
-             <property name="alignment">
-              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-             </property>
-             <property name="indent">
-              <number>0</number>
-             </property>
-            </widget>
-           </item>
            <item row="7" column="2">
             <layout class="QHBoxLayout" name="hzlCalibrationFile">
              <item>
-              <widget class="QLineEdit" name="lnCalibFile"/>
+              <widget class="QLineEdit" name="lnCalibFile">
+               <property name="readOnly">
+                <bool>true</bool>
+               </property>
+              </widget>
              </item>
              <item>
               <widget class="QPushButton" name="btnLoadCalibFile">
@@ -1006,7 +1085,34 @@ selected line</string>
               <number>6</number>
              </property>
              <item>
-              <widget class="QPushButton" name="pushButton_7">
+              <widget class="QComboBox" name="cmbCreateCalibFileFor">
+               <property name="layoutDirection">
+                <enum>Qt::LeftToRight</enum>
+               </property>
+               <item>
+                <property name="text">
+                 <string>flexion exercise</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>abduction exercise</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>internal rotation exercise</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>external rotation exercise</string>
+                </property>
+               </item>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btnCalibrateNow">
                <property name="sizePolicy">
                 <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
                  <horstretch>0</horstretch>
@@ -1015,22 +1121,6 @@ selected line</string>
                </property>
                <property name="text">
                 <string>Calibrate now!</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QLabel" name="lblCalibStatus">
-               <property name="font">
-                <font>
-                 <pointsize>9</pointsize>
-                 <italic>true</italic>
-                </font>
-               </property>
-               <property name="text">
-                <string>(Press this button to calibrate manually now.)</string>
-               </property>
-               <property name="alignment">
-                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
                </property>
               </widget>
              </item>
@@ -1138,6 +1228,32 @@ selected line</string>
              </property>
             </widget>
            </item>
+           <item row="10" column="0" colspan="2">
+            <widget class="QLabel" name="lblCreateCalibFileFor">
+             <property name="text">
+              <string>Create calibration file for:</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="1">
+            <widget class="QLabel" name="lblCalibDuration">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Maximum" vsizetype="Preferred">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="text">
+              <string>Calibration duration:</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+             </property>
+             <property name="indent">
+              <number>0</number>
+             </property>
+            </widget>
+           </item>
           </layout>
          </widget>
         </item>
@@ -1153,7 +1269,7 @@ selected line</string>
      <x>0</x>
      <y>0</y>
      <width>659</width>
-     <height>31</height>
+     <height>28</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuEdit">

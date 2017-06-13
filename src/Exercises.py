@@ -8,6 +8,7 @@ import sys
 import argparse
 import roslib; roslib.load_manifest('reha_game')
 import rospy
+import ast
 import roslaunch
 import rospkg
 from std_msgs.msg import String
@@ -18,6 +19,7 @@ from subprocess import Popen,PIPE,STDOUT
 from threading import Thread
 from time import sleep
 import signal
+from reha_game.msg import ExerciseInit,CalibrationData
 
 #                 |y=-0.1
 #        D        |      A
@@ -30,75 +32,48 @@ import signal
 
 # some class definitions that represent enums
 class Limb:
-	LEFT_ARM, RIGHT_ARM, LEFT_LEG, RIGHT_LEG = range(4)
+	LEFT_ARM, RIGHT_ARM = range(2)
+class RobotPosition:
+	LEFT, RIGHT, CENTER = range(3)
 class RotationType:
 	_unused, INTERNAL, EXTERNAL = range(3)
 class MotionType:
 	_unused, FLEXION, ABDUCTION = range(3)
-class Color:
-	YELLOW, BLUE, BLACK = range(3)
-
-# returns the HSV thresholds of the color (as a tuple) passed as parameter
-def get_hsv_thresholds(color):
-	if color == Color.BLUE:
-		# HSV color thresholds for BLUE
-		THRESHOLD_LOW = np.array([110,50,50], dtype=np.uint8)
-		THRESHOLD_HIGH = np.array([130,255,255], dtype=np.uint8)
-	elif color == Color.BLACK:
-		# HSV color thresholds for BLACK (not recommended for usage due to huge amounts of noise)
-		THRESHOLD_LOW = np.array([60,15,0], dtype=np.uint8)
-		THRESHOLD_HIGH = np.array([105,170,110], dtype=np.uint8)
-	elif color == Color.YELLOW:
-		# HSV color thresholds for YELLOW (default)
-		THRESHOLD_LOW = np.array([15,210,20], dtype=np.uint8)
-		THRESHOLD_HIGH = np.array([35,255,255], dtype=np.uint8)
-	else:
-		raise ValueError("Unknown or unused color!")
-	return (THRESHOLD_LOW, THRESHOLD_HIGH)
 
 # method that processes the arguments given as a parameter
 def process_args(argv):
 	# define arguments to parse from the argument vector
 	parser = argparse.ArgumentParser(description='Reads video footage from a camera or a video file, and performs the Rehazenter exercise on it.')
-	parser.add_argument('--width', type=int, default=640, dest="width", help='width of the camera window')
-	parser.add_argument('--height', type=int, default=480, dest="height", help='height of the camera window')
-	parser.add_argument('--path_to_video', type=str, default="", dest="path_to_video", help='file path to the video file (default: webcam)')
-	#parser.add_argument('--path-to-samples-folder', '-f', type=str, dest="arg_path_to_samples_folder", help='path to the folder where the object\'s image samples are stored')
-	parser.add_argument('--color', type=str, default="yellow", dest="color", help='the color of the object that should be tracked (default=yellow, supported=yellow,black,blue)')
+	parser.add_argument('--width', type=int, default=640, choices=range(320,1980), dest="width", help='width of the camera window')
+	parser.add_argument('--height', type=int, default=480, choices=range(280,1080), dest="height", help='height of the camera window')
+	parser.add_argument('--color_file', type=str, dest="color_file", help='the path to the color file of the object that should be tracked')
 	parser.add_argument('--spawn_nodes', action="store_true", dest="spawn_nodes", help='pass this argument in order to launch all the needed ROS nodes, if they aren\'t running already')
-	parser.add_argument('--motion_type', type=int, default="1", dest="motion_type", help='if specified value is valid, then it creates a simple motion exercise of the specified motion type (0=unused, 1=Flexion, 2=Abduction)')
-	parser.add_argument('--rotation_type', type=int, default="1", dest="rotation_type", help='if specified value is valid, then it creates a rotation exercise of the specified rotation type (0=unused, 1=Internal, 2=External)')
-	parser.add_argument('--number_of_repetitions', type=int, default="10", dest="number_of_repetitions", help='amount of repetitions to perform until completion of the exercise session')
-	parser.add_argument('--time_limit', type=int, default="0", dest="time_limit", help='time limit that the patient has to complete his exercise')
-	parser.add_argument('--limb', type=int, default="1", dest="limb", help='limb of the patient to be used for the exercise')
-	parser.add_argument('--calibration_duration', type=int, default="10", dest="calibration_duration", help='duration (in seconds) of the calibration procedure for the exercise')
+	parser.add_argument('--motion_type', type=int, default="1", choices=range(0,2), dest="motion_type", help='if specified value is valid, then it creates a simple motion exercise of the specified motion type (0=Flexion, 1=Abduction)')
+	parser.add_argument('--rotation_type', type=int, default="1", choices=range(0,2), dest="rotation_type", help='if specified value is valid, then it creates a rotation exercise of the specified rotation type (0=Internal, 1=External)')
+	parser.add_argument('--number_of_repetitions', type=int, default="10", choices=range(1,100), dest="number_of_repetitions", help='amount of repetitions to perform until completion of the exercise session')
+	parser.add_argument('--time_limit', type=int, default="0", choices=range(0,7200), dest="time_limit", help='time limit that the patient has to complete his exercise')
+	parser.add_argument('--limb', type=int, default="1", choices=range(0,1), dest="limb", help='limb of the patient to be used for the exercise')
+	parser.add_argument('--calibration_duration', type=int, default="10", choices=range(0,99), dest="calibration_duration", help='duration (in seconds) of the calibration procedure for the exercise')
+	parser.add_argument('--robot_position', type=str, default="left", choices=range(0,2), dest="robot_position", help='position of the robot, in relation to the object that you want to track (0=left, 1=center, 2=right)')
+	#parser.add_argument('--calibration_file', type=str, dest="calibration_file", help='path to the file containing the calibration data that will be used for object tracking')
+	parser.add_argument('--color_thresholds', type=int, nargs=6, choices=range(0,255), default="35 255 255 15 210 20", dest="color_thresholds", help='path to the output file containing the calibration data that will be created when calibrating')
+	parser.add_argument('--calibration_output_file', type=str, dest="calibration_output_file", help='path to the output file containing the calibration data that will be created when calibrating')
 	args = parser.parse_args(argv)
 
 	# create exercise with all passed arguments and return it
+	color_thresholds_tuple = ((args.color_thresholds[0],args.color_thresholds[1],args.color_thresholds[2]),(args.color_thresholds[3],args.color_thresholds[4],args.color_thresholds[5]))
 	if args.rotation_type != 0 and args.motion_type == 0:
-		exercise = RotationExercise(repetitions_limit=args.number_of_repetitions, calibration_duration=args.calibration_duration, camera_resolution=(args.width,args.height), color=string_to_color(args.color), limb=args.limb, time_limit=args.time_limit, path_to_video=args.path_to_video, spawn_ros_nodes=args.spawn_nodes)	
+		exercise = RotationExercise(repetitions_limit=args.number_of_repetitions, calibration_duration=args.calibration_duration, camera_resolution=(args.width,args.height), color_thresholds=color_thresholds_tuple, color_file=args.color_file, time_limit=args.time_limit, robot_position=args.robot_position, spawn_ros_nodes=args.spawn_nodes, calibration_output_file=args.calibration_output_file)	
 	else:
-		exercise = SimpleMotionExercise(repetitions_limit=args.number_of_repetitions, calibration_duration=args.calibration_duration, camera_resolution=(args.width,args.height), color=string_to_color(args.color), limb=args.limb, time_limit=args.time_limit, path_to_video=args.path_to_video, spawn_ros_nodes=args.spawn_nodes)	
+		exercise = SimpleMotionExercise(repetitions_limit=args.number_of_repetitions, calibration_duration=args.calibration_duration, camera_resolution=(args.width,args.height), color_thresholds=color_thresholds_tuple, color_file=args.color_file, time_limit=args.time_limit, robot_position=args.robot_position, spawn_ros_nodes=args.spawn_nodes, calibration_output_file=args.calibration_output_file)	
 	return exercise
 
-# returns the correct Color type for a color's string representation, passed as a parameter
-def string_to_color(color_str):
-	if color_str == "yellow":
-		return Color.YELLOW
-	elif color_str == "blue":
-		return Color.BLUE
-	elif color_str == "black":
-		return Color.BLACK
-	else:
-		raise ValueError("Cannot convert unrecognized string to color type!")
-
 class VideoReader(Thread):
-	def __init__(self, camera_resolution=(640,480), path_to_video="", color=Color.YELLOW):
+	def __init__(self, camera_resolution=(640,480), color_thresholds):
 		# Initialize camera and get actual resolution
 		Thread.__init__(self)
                 self.camera_resolution = camera_resolution
-                self.path_to_video = path_to_video
-                self.color = color
+                self._hsv_color_thresholds = color_thresholds
                 self._center = None
 		self._last_valid_center = None
                 self._radius = 0
@@ -125,6 +100,10 @@ class VideoReader(Thread):
 		return self._center
 
 	@property
+	def hsv_color_thresholds(self):
+		return self._hsv_color_thresholds
+
+	@property
 	def last_valid_center(self):
 		return self._last_valid_center
 
@@ -139,7 +118,7 @@ class VideoReader(Thread):
 	def path_to_video(self, path_to_video):
 		# TODO: add more checks here! (f.ex. type checking)
 		if path_to_video == None:
-			self._path_to_video = ""
+			raise TypeError("cannot process None type object!")
 		elif path_to_video == "" or os.path.isfile(path_to_video):
 			self._path_to_video = path_to_video
 		else:
@@ -160,15 +139,35 @@ class VideoReader(Thread):
 			self._camera_width = camera_resolution[0]
 			self._camera_height = camera_resolution[1]
 
-	@property
-	def color(self):
-		return self._color
-	@color.setter
-	def color(self, color):
-		if not (type(color) is int) or color not in range(3):
-			raise TypeError("Invalid color!")
-		else:	
-			self._color = color
+	#@property
+	#def color_file(self):
+	#	return self._color_file
+	#@color_file.setter
+	#def color_file(self, color_file):
+	#	if color_file == None:
+	#		raise TypeError("cannot process None type object!")
+	#	elif not (type(color_file) is str):
+	#		raise TypeError("file path string expected!")
+        #        elif color_file == "":
+	#		# load default yellow color (hard-coded values)
+	#		self._hsv_color_thresholds = ((35, 255, 255),(15, 210, 20))
+	#	elif os.path.isfile(color_file):
+	#		# load calibration data from file, if given
+	#		if color_file != "":
+	#			color_fileptr = open(color_file, "r")
+	#			next_line = color_fileptr.readLine()
+	#			while next_line != "":
+	#				if next_line == "[hsv_min]":
+	#					color_hsv_min = np.array(ast.literal_eval(color_fileptr.readLine()), np.uint8)
+	#				elif next_line == "[hsv_max]":
+	#					color_hsv_max = np.array(ast.literal_eval(color_fileptr.readLine()), np.uint8)
+	#				else:
+	#					raise ValueError("Invalid file contents! No valid header detected!")
+	#				next_line = color_fileptr.readLine()
+	#			self._hsv_color_thresholds = (color_hsv_max, color_hsv_min)
+	#			color_fileptr.close()
+	#	else:	
+	#		raise IOError("specified color file does not exist")
 	# *****************************************************************************************************
 	
 	def set_kill_thread(self):
@@ -207,8 +206,7 @@ class VideoReader(Thread):
                     img_modified = cv2.cvtColor(img_modified, cv2.COLOR_BGR2HSV)
 
                     # Set pixels to white if in color range, others to black (binary bitmap)
-                    hsv_thresholds = get_hsv_thresholds(self.color)
-                    img_modified = cv2.inRange(img_modified, hsv_thresholds[0], hsv_thresholds[1])
+                    img_modified = cv2.inRange(img_modified, self._hsv_color_thresholds[0], self._hsv_color_thresholds[1])
 
                     # Dilate image to make white blobs larger
                     self._img_modified = cv2.dilate(img_modified, None, iterations = 1)
@@ -369,16 +367,20 @@ class Timer(Thread):
 class Exercise:
 	__metaclass__ = ABCMeta
 
-	def __init__(self, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), color=Color.YELLOW, limb=Limb.LEFT_ARM, time_limit=0, path_to_video="", spawn_ros_nodes=False):
+	def __init__(self, repetitions_limit=10, calibration_duration=10, calibration_output_file="", camera_resolution=(640,480), hsv_thresholds=((35, 255, 255),(15, 210, 20)), time_limit=0, spawn_ros_nodes=False, robot_position=RobotPosition.LEFT):
 		self.repetitions_limit = repetitions_limit
 		self.calibration_duration = calibration_duration
 		if calibration_duration > 0:
-			self._calibration_points = []
+			self._calibration_points_left_arm = []
+			self._calibration_points_right_arm = []
+		self.calibration_output_file = calibration_output_file
+		#self.calibration_file = calibration_file
 		self.camera_resolution = camera_resolution
-		self.limb = limb
+		self.limb = Limb.LEFT_ARM 
+		self.robot_position = robot_position
 		self.time_limit = time_limit
 		self._spawn_nodes = spawn_ros_nodes
-                self._video_reader = VideoReader(camera_resolution, path_to_video, color)
+                self._video_reader = VideoReader(camera_resolution, hsv_thresholds)
                	self._video_reader.start()
 		self._encourager = EncouragerUnit(self.repetitions_limit, spawnRosNodes=self._spawn_nodes)
 		sleep(0.2)	# wait some miliseconds until the video reader grabs its first frame from the capture device
@@ -391,7 +393,54 @@ class Exercise:
 		elif 2*camera_resolution[0] < camera_resolution[1]:
 			self._tolerance_y = camera_resolution[1] / 6
 
+		# load calibration data from file, if given
+		#if self.calibration_file != "":
+		#	calib_fileptr = open(self.calibration_file, "r")
+		#	next_line = calib_fileptr.readLine()
+		#	while next_line != "":
+		#		if next_line == "[left_arm]":
+		#			self._calibration_points_left_arm = ast.literal_eval(calib_fileptr.readLine())
+		#		elif next_line == "[right_arm]":
+		#			self._calibration_points_right_arm = ast.literal_eval(calib_fileptr.readLine())
+		#		else:
+		#			raise ValueError("Invalid file contents! No valid header detected!")
+		#		next_line = calib_fileptr.readLine()
+		#	calib_fileptr.close()
+
+
 	# ****************************** property definitions for the base class ******************************
+	@property
+	def calibration_points_left_arm(self):
+		return self._calibration_points_left_arm
+	@property
+	def calibration_points_right_arm(self):
+		return self._calibration_points_right_arm
+
+	@property
+	def calibration_output_file(self):
+		return self._calibration_output_file
+	@calibration_output_file.setter
+	def calibration_output_file(self, calibration_output_file):
+		if calibration_output_file == None:
+			raise TypeError("cannot process None type object!")
+		elif not (type(color_file) is str):
+			raise TypeError("file path string expected!")
+		else:
+			self._calibration_output_file = calibration_output_file
+
+	@property
+	def calibration_file(self):
+		return self._calibration_file
+	@calibration_file.setter
+	def calibration_file(self, calibration_file):
+		# TODO: add more checks here! (f.ex. type checking)
+		if calibration_file == None:
+			self._calibration_file = ""
+		elif calibration_file == "" or os.path.isfile(calibration_output_file):
+			self._calibration_file = calibration_file
+		else:
+			raise ValueError("Specified calibration file does not exist!")
+
 	@property
 	def repetitions_limit(self):
 		return self._repetitions_limit
@@ -420,10 +469,20 @@ class Exercise:
 		return self._limb
 	@limb.setter
 	def limb(self, limb):
-		if not (type(limb) is int) or limb not in range(4):
+		if not (type(limb) is int) or limb not in range(2):
 			raise TypeError("Invalid limb type!")
 		else:
 			self._limb = limb
+
+	@property
+	def robot_position(self):
+		return self._robot_position
+	@robot_position.setter
+	def robot_position(self, robot_position):
+		if not (type(robot_position) is int) or robot_position not in range(3):
+			raise TypeError("Invalid robot position!")
+		else:
+			self._robot_position = robot_position
 
 	@property
 	def time_limit(self):
@@ -505,8 +564,8 @@ class Exercise:
 
 # exercise that counts circular movements performed on the table surface
 class RotationExercise(Exercise):
-	def __init__(self, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), color=Color.YELLOW, limb=Limb.LEFT_ARM, time_limit=0, path_to_video="", spawn_ros_nodes=False, rotation_type=RotationType.INTERNAL):
-		super(RotationExercise, self).__init__(repetitions_limit, calibration_duration, camera_resolution, color, limb, time_limit, path_to_video, spawn_ros_nodes)
+	def __init__(self, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), color_file="", limb=Limb.LEFT_ARM, time_limit=0, spawn_ros_nodes=False, rotation_type=RotationType.INTERNAL, robot_position=RobotPosition.LEFT):
+		super(RotationExercise, self).__init__(repetitions_limit, calibration_duration, camera_resolution, color_file, limb, time_limit, spawn_ros_nodes, robot_position)
 		self._rotation_type = rotation	
 
 	@property
@@ -525,8 +584,8 @@ class RotationExercise(Exercise):
 
 # exercise that counts simple movements with 2 or 3 point coordinates performed on the table surface
 class SimpleMotionExercise(Exercise):
-	def __init__(self, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), color=Color.YELLOW, limb=Limb.LEFT_ARM, time_limit=0, path_to_video="", spawn_ros_nodes=False, motion_type=MotionType.FLEXION):
-		super(SimpleMotionExercise, self).__init__(repetitions_limit, calibration_duration, camera_resolution, color, limb, time_limit, path_to_video, spawn_ros_nodes)
+	def __init__(self, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), limb=Limb.LEFT_ARM, time_limit=0, spawn_ros_nodes=False, motion_type=MotionType.FLEXION, robot_position=RobotPosition.LEFT):
+		super(SimpleMotionExercise, self).__init__(repetitions_limit, calibration_duration, camera_resolution, color_file, limb, time_limit, spawn_ros_nodes, robot_position)
 		self._motion_type = motion_type
 
 	@property
@@ -550,19 +609,40 @@ class SimpleMotionExercise(Exercise):
 		number_of_calibration_points = 0
 		if self.motion_type == MotionType.FLEXION or self.motion_type == MotionType.ABDUCTION:
 			number_of_calibration_points = 2
-		self._calibration_points = []
+		self._calibration_points_left_arm = []
+		self._calibration_points_right_arm = []
 
 		# number of frames to wait when no object detected (before warning user)
 		NO_CENTER_FOUND_MAX = 200
 
 		# Main calibration loop
 		timer = None
+		encourager_guide_flag = True
 		no_center_found_counter = 0
 		no_center_found_flag = False
 		# sleep for 2 seconds in order to wait for soundplay to be ready
 		sleep(2)
-		self._encourager.say("Please move your hand to your desired position and hold for a few seconds.")
-		while len(self._calibration_points) < number_of_calibration_points:
+		while len(self._calibration_points_right_arm) < number_of_calibration_points:
+			# tell encourager to say a sentence, if needed
+			if encourager_flag:
+				if self._limb == Limb.LEFT_ARM:
+					if len(self._calibration_points_left_arm) == 0:
+						self._encourager.say("Please lay your left hand on the table, close to you, and hold for a few seconds.")
+					else:	
+						if self._motion_type == MotionType.FLEXION:
+							self._encourager.say("Now, stretch your left arm out in front of you on the table and hold the position.")
+						else:
+							self._encourager.say("Now, stretch your left arm diagonally up and left on the table and hold the position.")
+				elif self._limb == Limb.RIGHT_ARM:
+					if len(self.calibration_points_right_arm) == 0:
+						self._encourager.say("Next, please lay your right hand on the table, close to you, and hold for a few seconds.")
+					else:	
+						if self._motion_type == MotionType.FLEXION:
+							self._encourager.say("Now, stretch your right arm out in front of you on the table and hold the position.")
+						else:
+							self._encourager.say("Now, stretch your right arm diagonally up and right on the table and hold the position.")
+				encourager_guide_flag = False
+
 			# get next frame from capture device
 			frame = self._video_reader.img_modified
 
@@ -570,8 +650,8 @@ class SimpleMotionExercise(Exercise):
 			if timer == None and no_center_found_counter < NO_CENTER_FOUND_MAX:
 				timer = Timer(self.calibration_duration)
 				timer.start()
-				if len(self._calibration_points) > 0:
-					self._encourager.say("Now move your arm to the next position and hold it for a few seconds.")
+				if (self_limb == Limb.LEFT_ARM and len(self._calibration_points_left_arm) > 0) or (self_limb == Limb.RIGHT_ARM and len(self._calibration_points_right_arm) > 0):
+					encourager_guide_flag = True
 
 			# if no object was found in the video capture for some time, wait for object to reappear
 			if self._video_reader.center != None:
@@ -580,15 +660,35 @@ class SimpleMotionExercise(Exercise):
 					if no_center_found_counter == 0 and no_center_found_flag:
 						self._encourager.say("Let's try to calibrate again!")
 						no_center_found_flag = False
+						encourager_guide_flag = True
 				# store coordinates when timer has run out
 				if timer != None and timer.is_alive() == False:
 					# check if any of the recorded points are too close to each other before inserting
-					if len(self._calibration_points) > 0 and (abs((self._calibration_points[len(self._calibration_points)-1])[0]-self._video_reader.center[0]) < self._tolerance_x or abs((self._calibration_points[len(self._calibration_points)-1])[1]-self._video_reader.center[1]) < self._tolerance_y):
-						self._encourager.say("The calibration points are too close to each other. Please make sure that the points are further away from each other.")
-						self._calibration_points = []
-					elif no_center_found_counter == 0:
-						# take last valid centroid that was found by video reader and store coordinates
-						self._calibration_points.append(self._video_reader.last_valid_center)
+					if self._limb == Limb.LEFT_ARM: 
+						# check if calibration point is valid for the left arm
+						if self._calibration_points_left_arm > 0 and ((self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.ABDUCTION or self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.FLEXION) and (abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[1]-self._video_reader.center[1]) < self._tolerance_y) \
+						or ((self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.ABDUCTION or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.FLEXION or self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.FLEXION) and ((abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[0]-self._video_reader.center[0]) < self._tolerance_x) or (abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[1]-self._video_reader.center[1]) < self._tolerance_y)) \
+						or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.ABDUCTION and (abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[0]-self._video_reader.center[0]) < self._tolerance_x))):
+							self._encourager.say("The calibration points are too close to each other. Please make sure that the points are further away from each other.")
+							self._calibration_points_left_arm = []
+						elif no_center_found_counter == 0:
+							# take last valid centroid that was found by video reader and store coordinates
+							self._calibration_points_left_arm.append(self._video_reader.last_valid_center)
+							# switch to right arm when all points for the left arm have been calibrated
+							if self._calibration_points_left_arm == number_of_calibration_points:
+								self.limb = Limb.RIGHT_ARM
+							encourager_guide_flag = True
+					else:
+						# else, check if calibration point is valid for the right arm
+						if self._calibration_points_right_arm > 0 and (self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.ABDUCTION and (abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[0]-self._video_reader.center[0]) < self._tolerance_x) \
+						or ((self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.FLEXION or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.ABDUCTION) and (abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[1]-self._video_reader.center[1]) < self._tolerance_y)) \
+						or ((self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.ABDUCTION or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.FLEXION or self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.FLEXION) and ((abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[0]-self._video_reader.center[0]) < self._tolerance_x) or (abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[1]-self._video_reader.center[1]) < self._tolerance_y)))):
+							self._encourager.say("The calibration points are too close to each other. Please make sure that the points are further away from each other.")
+							self._calibration_points_right_arm = []
+						elif no_center_found_counter == 0:
+							# take last valid centroid that was found by video reader and store coordinates
+							self._calibration_points_right_arm.append(self._video_reader.last_valid_center)
+							encourager_guide_flag = True
 					timer = None
 			elif no_center_found_counter < NO_CENTER_FOUND_MAX:
 				no_center_found_counter += 1
@@ -613,6 +713,33 @@ class SimpleMotionExercise(Exercise):
 				cv2.destroyAllWindows()
 				return 2
 		self._encourager.say("Calibration completed!")
+
+		# publish calibration data to GUI application
+		pub = rospy.Publisher('exercise_calibration_data', CalibrationData, queue_size=1)
+		calibration_data = CalibrationData()
+		calibration_data.robot_position = self.robot_position
+		calibration_data.motion_type = self.motion_type
+		calibration_data.rotation_type = self.rotation_type
+		calibration_data.limb = self.limb
+		calibration_data.calibration_duration = self.calibration_duration
+		calibration_data.max_hue = self._video_reader.hsv_color_thresholds[0][0]
+		calibration_data.max_sat = self._video_reader.hsv_color_thresholds.color_hsv_max[0][1]
+		calibration_data.max_value = self._video_reader.hsv_color_thresholds.color_hsv_max[0][2]
+		calibration_data.min_hue = self._video_reader.hsv_color_thresholds.color_hsv_min[1][0]
+		calibration_data.min_sat = self._video_reader.hsv_color_thresholds.color_hsv_min[1][1]
+		calibration_data.min_value = self._video_reader.hsv_color_thresholds.color_hsv_min[1][2]
+		calibration_data.coordinates_left_arm = []
+		for point in self._calibration_points_left_arm:
+			temp_point = CalibrationPoint()
+			temp_point.x = point[0]
+			temp_point.y = point[1]
+			calibration_data.coordinates_left_arm.append(temp_point)
+		for point in self._calibration_points_right_arm:
+			temp_point = CalibrationPoint()
+			temp_point.x = point[0]
+			temp_point.y = point[1]
+			calibration_data.coordinates_right_arm.append(temp_point)
+		pub.publish(calibration_data)
 		return 0
 
 #class ConesExercise(Exercise)
@@ -626,7 +753,10 @@ if __name__ == '__main__':
 	# use the "rospy.myargv" argument vector instead of the built-in "sys.argv" to avoid problems with ROS argument re-mapping
 	# (reason: https://groups.google.com/a/rethinkrobotics.com/forum/#!topic/brr-users/ErXVWhRmtNA)
 	exercise = process_args(rospy.myargv()[1:])
-	if exercise.calibrate() == 0:
+	result = 0
+	if exercise.calibration_file == "": 
+		result = exercise.calibrate()
+	if result == 0: 
 		exercise.start_game()
 	exercise.stop_game()
 	sys.exit()

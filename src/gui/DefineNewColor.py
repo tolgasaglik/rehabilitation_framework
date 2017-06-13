@@ -19,7 +19,7 @@ class UIDefineNewColorWidget(QWidget):
 		# initialize color saving dialog
                 self.dlgSaveColors = QFileDialog()
                 self.dlgSaveColors.setFileMode(QFileDialog.AnyFile)
-                self.dlgSaveColors.setFilter("Image files (*.png *.jpeg *.jpg *.bmp)")
+                self.dlgSaveColors.setFilter("Color files (*.clr)")
                 self.dlgSaveColors.setAcceptMode(QFileDialog.AcceptSave)
 
 		# initialize image graphics view
@@ -64,7 +64,10 @@ class UIDefineNewColorWidget(QWidget):
 	def btnSaveColorsClicked(self):
 		if self.dlgSaveColors.exec_():
 			# open new color file
-			color_file = open(self.dlgSaveColors.selectedFiles()[0], "w")
+			filename = self.dlgSaveColors.selectedFiles()[0]
+			if not filename.endswith(".clr"):
+				filename += ".clr"
+			color_file = open(filename, "w")
 			# get max and min HSV thresholds and pass them to main application window
 			hsv_threshold_max = (0,0,0)
 			hsv_threshold_min = (255,255,255)
@@ -73,8 +76,10 @@ class UIDefineNewColorWidget(QWidget):
 				hsv_threshold_max = (max(hsv_threshold_max[0], hsv[0]), max(hsv_threshold_max[1], hsv[1]), max(hsv_threshold_max[2], hsv[2]))
 				hsv_threshold_min = (min(hsv_threshold_min[0], hsv[0]), min(hsv_threshold_min[1], hsv[1]), min(hsv_threshold_min[2], hsv[2]))
 			color_file.write("[hsv_max]\n")
-			color_file.write(str(hsv_threshold_max).strip("()").replace(" ", "") + "\n")
+			#color_file.write(str(hsv_threshold_max).strip("()").replace(" ", "") + "\n")
+			color_file.write(str(hsv_threshold_max) + "\n")
 			color_file.write("[hsv_min]\n")
-			color_file.write(str(hsv_threshold_min).strip("()").replace(" ", "") + "\n")
+			#color_file.write(str(hsv_threshold_min).strip("()").replace(" ", "") + "\n")
+			color_file.write(str(hsv_threshold_min) + "\n")
 			color_file.close()
-			#self._main_window_ref.updateColors(hsv_threshold_max, hsv_threshold_min)
+			self._main_window_ref.updateColorFileName(filename)

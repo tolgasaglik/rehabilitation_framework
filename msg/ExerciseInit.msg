@@ -1,0 +1,16 @@
+uint8 blocks
+uint8 repetitions
+uint16 time_limit
+uint16 camera_width
+uint16 camera_height
+bool quantitative_is_enabled
+uint8 quantitative_frequency
+bool qualitative_activated
+uint8 qualitative_frequency
+uint8 robot_position
+uint8 motion_type
+uint8 rotation_type
+uint8 calilbration_duration
+HSVThresholds hsv_thresholds
+CalibrationPoint[] coordinates_left_arm
+CalibrationPoint[] coordinates_right_arm

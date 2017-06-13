@@ -1,0 +1,3 @@
+bool is_fixed_feedback
+uint8 repetitions
+string face_to_show

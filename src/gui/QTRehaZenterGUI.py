@@ -9,7 +9,7 @@
 from PyQt4 import QtCore, QtGui
 from PyQt4.QtCore import QThread, QRectF, Qt
 from subprocess import Popen,PIPE
-from PyQt4.QtGui import QWidget, QTabWidget, QLabel, QImage, QPixmap, QGraphicsScene, QGraphicsPixmapItem, QHeaderView, QTableWidgetItem
+from PyQt4.QtGui import QMessageBox, QFileDialog, QWidget, QTabWidget, QLabel, QImage, QPixmap, QGraphicsScene, QGraphicsPixmapItem, QHeaderView, QTableWidgetItem
 import os,sys,inspect
 #from threading import Thread
 #from time import sleep
@@ -22,7 +22,7 @@ parentdir = os.path.dirname(currentdir)
 sys.path.insert(0,parentdir) 
 from PyQt4 import uic
 import Exercises
-from Exercises import Color,Limb,RotationType,MotionType
+from Exercises import Limb,RotationType,MotionType,RobotPosition
 import DefineNewColor
 
 class QTRehaZenterGUI(QtGui.QMainWindow):
@@ -43,6 +43,24 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	self.grRehaZenterLogo.setScene(rehaZenterLogoScene)
 	self.grRehaZenterLogo.fitInView(rehaZenterLogoScene.sceneRect(), Qt.KeepAspectRatio)
 
+	# initialize calibration file selection dialog
+	self.dlgLoadCalibFile = QFileDialog()
+	self.dlgLoadCalibFile.setFileMode(QFileDialog.ExistingFile)
+	self.dlgLoadCalibFile.setFilter("Calibration files (*.cal)")
+	self.dlgLoadCalibFile.setAcceptMode(QFileDialog.AcceptOpen)
+
+	# initialize color file selection dialog
+	self.dlgLoadColorFile = QFileDialog()
+	self.dlgLoadColorFile.setFileMode(QFileDialog.ExistingFile)
+	self.dlgLoadColorFile.setFilter("Color files (*.clr)")
+	self.dlgLoadColorFile.setAcceptMode(QFileDialog.AcceptOpen)
+
+	# initialize calibration file save dialog
+	self.dlgSaveCalibFile = QFileDialog()
+	self.dlgSaveCalibFile.setFileMode(QFileDialog.AnyFile)
+	self.dlgSaveCalibFile.setFilter("Calibration files (*.cal)")
+	self.dlgSaveCalibFile.setAcceptMode(QFileDialog.AcceptSave)
+
 	# initialize list of faces (in string form)
 	self._faces_list = ["sad", "happy", "crying"]
 	self.cmbFaces.addItems(self._faces_list)
@@ -51,6 +69,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	self.lblPerRepetitions1.setEnabled(False)
 	self.lblPerRepetitions2.setEnabled(False)
 	self.spnQuantEncRep.setEnabled(False)
+	self.cmbQualiEnc.setEnabled(False)
 	self.btnDeleteLine.setEnabled(False)
 	self.spnFixedReps.setEnabled(False)
 	self.spnFrequencyReps.setEnabled(False)
@@ -74,12 +93,16 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	self.slNbrBlocks.valueChanged.connect(self.slNbrBlocksValueChanged)
 	self.rdFixed.clicked.connect(self.rdFixedClicked)
 	self.rdFrequency.clicked.connect(self.rdFrequencyClicked)
-	self.chkQuantitative.clicked.connect(self.chkQuantitativeClicked)
 	self.btnAddLine.clicked.connect(self.btnAddLineClicked)
 	self.cmbFaces.currentIndexChanged.connect(self.cmbFacesCurrentIndexChanged)
 	self.actionQuit.triggered.connect(self.closeEvent)
 	self.btnDeleteLine.clicked.connect(self.btnDeleteLineClicked)
 	self.tblFacialFeedback.itemClicked.connect(self.tblFacialFeedbackItemClicked)
+	self.chkQualitative.clicked.connect(self.chkQualitativeClicked)
+	self.chkQuantitative.clicked.connect(self.chkQuantitativeClicked)
+	self.btnLoadColorFile.clicked.connect(self.btnLoadColorFileClicked)
+	self.btnLoadCalibFile.clicked.connect(self.btnLoadCalibFileClicked)
+	self.btnCalibrateNow.clicked.connect(self.btnCalibrateNowClicked)
 
 
     # *******************************************************************************************
@@ -122,6 +145,17 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	self.txtViewLogOutput.appendPlainText("External rotation exercise selected.")
 
     def btnBeginClicked(self):
+	# rotation exercises have not been implemented yet...
+	if not self.btnInternalRotationExercise.isEnabled() or not self.btnExternalRotationExercise.isEnabled():
+		msg = QMessageBox()
+		msg.setIcon(QMessageBox.Warning)
+		msg.setText("Sorry, rotation exercises have not been implemented yet!")
+		msg.setInformativeText("Please choose one of the motion exercises instead until rotation exercises become available.")
+		msg.setWindowTitle("Rotation exercises warning")
+		msg.setStandardButtons(QMessageBox.Ok)
+		msg.exec_()
+		return
+
 	# disable all other buttons while the chosen exercise is running
 	self.btnFlexionMotionExercise.setEnabled(False)
 	self.btnAbductionMotionExercise.setEnabled(False)
@@ -132,24 +166,32 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 
 	# spawn exercise subprocess
 	self.txtViewLogOutput.appendPlainText("******************** BEGIN EXERCISE ********************")
-        #uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
-        #roslaunch.configure_logging(uuid)
-	launch_params = ['roslaunch', 'reha_game', 'Exercise_Launcher.launch']
-	launch_params.extend(('width:='+str(self.spnWidth.value()), 'height:='+str(self.spnHeight.value()), 'color:=yellow', 'number_of_repetitions:='+str(self.spnNbrRepetitions.value()), "time_limit:="+str(self.spnTimeLimit.value()), 'calibration_duration:='+str(self.spnCalibDuration.value())))
-	#if self.btnFlexionMotionExercise.isChecked():
-        #self.launcher = roslaunch.parent.ROSLaunchParent(uuid, ["./../../launch/Exercise_Launcher.launch"])
-	self.exercise_process = Popen(launch_params)
+	#launch_params = ['roslaunch', 'reha_game', 'Exercise_Launcher.launch']
+	#launch_params.extend(('width:='+str(self.spnWidth.value()), 'height:='+str(self.spnHeight.value()), 'color:=yellow', 'number_of_repetitions:='+str(self.spnNbrRepetitions.value()), "time_limit:="+str(self.spnTimeLimit.value()), 'calibration_duration:='+str(self.spnCalibDuration.value())))
+	pub = rospy.Publisher("Reha_ExerciseInit", ExerciseInit)
+	rospy.init_node("Reha_ExerciseNode", anonymous=True)
+	msg = ExerciseInit()
+
+	# build exercise init message
+	msg.camera_width = self.spnWidth.value()
+	msg.camera_height = self.spnHeight.value()
+	msg.blocks = self.slNbrBlocks.value()
+	msg.repetitions = self.spnTimeLimit.value()
+	msg.calibration_duration = self.spnCalibDuration.value()
+	msg.quantitative_enabled = self.chkQuantitative.isChecked()
+	msg.quantitative_frequency = self.spnQuantEncRep.value()
+	msg.qualitative_enabled = self.chkQualitative.isChecked()
+	msg.qualitative_frequency = self.spnQualiEnc.value()
+	msg.robot_position = self.cmbRobotPosition.currentIndex()
+	msg.rotation_type = 0
+	
+
+	if self.btnFlexionMotionExercise.isChecked():
+		#launch_params.extend(('motion_type:=0'))
 		
-        #elif self.btnAbductionMotionExercise.isChecked():
-        #        # TODO: implement start_game() of this exercise and create launch file
-        #        self.launcher = roslaunch.parent.ROSLaunchParent(uuid, ["./../../launch/Exercise_Launcher.launch"])
-        #elif self.btnInternalRotationExercise.isChecked():
-        #        # TODO: implement start_game() of this exercise and create launch file
-        #        self.launcher = roslaunch.parent.ROSLaunchParent(uuid, ["./../../launch/Exercise_Launcher.launch"])
-        #else:
-        #        # TODO: implement start_game() of this exercise and create launch file
-        #        self.launcher = roslaunch.parent.ROSLaunchParent(uuid, ["./../../launch/Exercise_Launcher.launch"])
-        #self.launcher.start()
+	elif self.btnAbductionMotionExercise.isChecked():
+		#launch_params.extend(('motion_type:=1'))
+	#self.exercise_process = Popen(launch_params)
 
     def btnStopClicked(self):
 	# stop exercise subprocess and kill ROS console worker thread
@@ -168,7 +210,20 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	self.txtViewLogOutput.appendPlainText("********************* END EXERCISE *********************")
 
     def chkQuantitativeClicked(self):
-	self.chkQuantitative.setEnabled(not self.chkQuantitative.isChecked())
+	self.spnQuantEncRep.setEnabled(self.chkQuantitative.isChecked())
+
+    def chkQualitativeClicked(self):
+	self.cmbQualiEnc.setEnabled(self.chkQualitative.isChecked())
+
+    def btnLoadColorFileClicked(self):
+	if self.dlgLoadColorFile.exec_():
+		filename = self.dlgLoadColorFile.selectedFiles()[0]
+		self.lnColorFile.setText(filename)
+
+    def btnLoadCalibFileClicked(self):
+	if self.dlgLoadCalibFile.exec_():
+		filename = self.dlgLoadCalibFile.selectedFiles()[0]
+		self.lnCalibFile.setText(filename)
 
     def rdFixedClicked(self):
 	self.spnFrequencyReps.setEnabled(False)
@@ -189,6 +244,20 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
     def btnDeleteLineClicked(self):
 	self.tblFacialFeedback.removeRow(self.tblFacialFeedback.currentRow())
 	self.btnDeleteLine.setEnabled(False)
+
+    def btnCalibrateNowClicked(self):
+	if self.dlgSaveCalibFile.exec_():
+		# TODO: publish calibration request to service
+
+		# write calibration points to file
+		calib_fileptr = open(self.calibration_output_file, "w")
+		calib_fileptr.write("motion_type=" + str(self.motion_type) + "\n")
+		calib_fileptr.write("rotation_type=" + str(self.rotation_type) + "\n")
+		calib_fileptr.write("robot_position=" + str(self.robot_position) + "\n")
+		calib_fileptr.write("limb=" + str(self.limb) + "\n")
+		calib_fileptr.write("calibration_points_left_arm=" + str(self._calibration_points_left_arm)+ "\n")
+		calib_fileptr.write("calibration_points_right_arm=" + str(self._calibration_points_right_arm)+ "\n")
+		calib_fileptr.close()	
 	
 
     def tblFacialFeedbackItemClicked(self):
@@ -225,16 +294,14 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
     def openDefineNewColorWidget(self):
 	self.defineNewColorWidget.show()
 
-    def updateCustomColor(self, custom_color):
-	self.exercise_custom_color = custom_color
+    def updateColorFileName(self, color_filename):
+	self.lnColorFile.setText(self.color_filename)
 
     def slNbrBlocksValueChanged(self):
 	self.lblNbrBlocksValue.setText(str(self.slNbrBlocks.value()))
 
     def closeEvent(self, event):
-        reply = QtGui.QMessageBox.question(self, 'Message',
-            "Are you sure that you want to quit?", QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
-
+        reply = QtGui.QMessageBox.question(self, 'Message', "Are you sure that you want to quit?", QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
         if reply == QtGui.QMessageBox.Yes:
 		if hasattr(self, "exercise_process") and self.exercise_process != None:
 			#self.exercise_process.communicate(input="q")
