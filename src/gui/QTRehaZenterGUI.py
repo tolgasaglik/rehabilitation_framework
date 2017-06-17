@@ -9,8 +9,7 @@
 from PyQt4 import QtCore, QtGui
 from PyQt4.QtCore import QThread, QRectF, Qt
 from PyQt4.QtGui import QMessageBox, QFileDialog, QWidget, QTabWidget, QLabel, QImage, QPixmap, QGraphicsScene, QGraphicsPixmapItem, QHeaderView, QTableWidgetItem
-import os,sys,inspect
-import roslaunch
+import os,sys,inspect,ast
 import rospy
 # include parent "src" directory to sys.path, otherwise import won't work
 # (source: http://stackoverflow.com/questions/714063/importing-modules-from-parent-folder)
@@ -25,23 +24,18 @@ from rehabilitation_framework.srv import *
 import DefineNewColor
 
 def load_color_file(filename):
-	color_fileptr = open(filename, "r")
-	hsv_thresholds = HSVThresholds()
-	for line in color_fileptr.readLines():
-		if line.startsWith("max_hue="):
-			hsv_thresholds.max_hue = int(line[8:])
-		if line.startsWith("max_sat="):
-			hsv_thresholds.max_sat = int(line[8:])
-		if line.startsWith("max_value="):
-			hsv_thresholds.max_value = int(line[10:])
-		if line.startsWith("min_hue="):
-			hsv_thresholds.min_hue = int(line[8:])
-		if line.startsWith("min_sat="):
-			hsv_thresholds.min_sat = int(line[8:])
-		if line.startsWith("min_value="):
-			hsv_thresholds.min_value = int(line[10:])
-	color_fileptr.close()
-	return hsv_thresholds
+	rgb_color_fileptr = open(filename, "r")
+	colors = RGBColorList()
+	for line in rgb_color_fileptr.readlines():
+		to_array = ast.literal_eval(line)
+		assert len(to_array) == 3
+		color = RGBColor()
+		color.red = to_array[0]
+		color.green = to_array[1]
+		color.blue = to_array[2]
+		colors.rgb_color_list.append(color)
+	rgb_color_fileptr.close()
+	return colors
 
 
 class QTRehaZenterGUI(QtGui.QMainWindow):
@@ -65,7 +59,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	# initialize calibration file selection dialog
 	self.dlgLoadCalibFile = QFileDialog()
 	self.dlgLoadCalibFile.setFileMode(QFileDialog.ExistingFile)
-	self.dlgLoadCalibFile.setFilter("Calibration files (*.cal)")
+	self.dlgLoadCalibFile.setFilter("Calibration files (*.clb)")
 	self.dlgLoadCalibFile.setAcceptMode(QFileDialog.AcceptOpen)
 
 	# initialize color file selection dialog
@@ -279,7 +273,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 			self.msgRotationExercises.exec_()
 			return
 		try:
-			request.hsv_thresholds = load_color_file(str(self.lnColorFile.text()))
+			request.rgb_color_list = load_color_file(str(self.lnColorFile.text()))
 		except IOError:
 			# TODO: maybe show error in dialog box instead?
 			print "Color file could not be read!"
@@ -304,7 +298,10 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 			return
 
 		# write calibration points to file
-		calib_fileptr = open(self.dlgSaveCalibFile.selectedFiles()[0], "w")
+		filename = self.dlgSaveCalibFile.selectedFiles()[0]
+		if not filename.endsWith(".clb"):
+			filename += ".clb"
+		calib_fileptr = open(filename, "w")
 		calib_fileptr.write("motion_type=" + str(request.motion_type) + "\n")
 		calib_fileptr.write("rotation_type=" + str(request.rotation_type) + "\n")
 		calib_fileptr.write("robot_position=" + str(request.robot_position) + "\n")
@@ -348,7 +345,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	self.defineNewColorWidget.show()
 
     def updateColorFileName(self, color_filename):
-	self.lnColorFile.setText(self.color_filename)
+	self.lnColorFile.setText(color_filename)
 
     def slNbrBlocksValueChanged(self):
 	self.lblNbrBlocksValue.setText(str(self.slNbrBlocks.value()))

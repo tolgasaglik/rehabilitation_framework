@@ -741,7 +741,7 @@
              <item row="2" column="0">
               <widget class="QLabel" name="lblFaceToShow">
                <property name="text">
-                <string>Face to show:</string>
+                <string>Emotion to show:</string>
                </property>
                <property name="alignment">
                 <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -794,7 +794,7 @@
            <item row="2" column="0">
             <widget class="QLabel" name="lblAddFeedback">
              <property name="text">
-              <string>Add new facial feedback:</string>
+              <string>Add new emotional feedback:</string>
              </property>
             </widget>
            </item>
@@ -862,7 +862,7 @@
                </column>
                <column>
                 <property name="text">
-                 <string>Face</string>
+                 <string>Emotion</string>
                 </property>
                </column>
               </widget>

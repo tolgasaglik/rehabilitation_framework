@@ -1,4 +1,6 @@
-[hsv_max]
-(105, 170, 110)
-[hsv_min]
-(60, 15, 0)
+max_hue=105
+max_sat=170
+max_value=110
+min_hue=60
+min_sat=15
+min_value=0

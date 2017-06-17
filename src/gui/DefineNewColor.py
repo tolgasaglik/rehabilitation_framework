@@ -1,5 +1,5 @@
 from PyQt4 import uic
-from PyQt4.QtCore import QPoint
+from PyQt4.QtCore import QPoint, Qt
 from PyQt4.QtGui import QColor, QSizePolicy, QPainter, QWidget, QFileDialog, QGraphicsScene, QGraphicsView, QImage, QBrush, QPixmap, QGraphicsPixmapItem
 
 
@@ -44,6 +44,7 @@ class UIDefineNewColorWidget(QWidget):
 			self._image = QImage(filename)
 			self._imagePixmap = QGraphicsPixmapItem(QPixmap(self._image), None, self._imageScene)
 			self.grObjectImage.setScene(self._imageScene)
+        		self.grObjectImage.fitInView(self._imageScene.sceneRect(), Qt.KeepAspectRatio)
 			self._imagePixmap.mousePressEvent = self.getRGBFromPixel
 
 	def getRGBFromPixel(self, event):
@@ -56,7 +57,7 @@ class UIDefineNewColorWidget(QWidget):
 				for w in widgets:
 					if isinstance(w, QGraphicsView) and not w.isVisible():
 						w.setVisible(True)
-						w.setStyleSheet("background-color: rbg(" + str(self._detected_colors[len(self._detected_colors)-1].red()) + ", " + str(self._detected_colors[len(self._detected_colors)-1].green()) + ", " + str(self._detected_colors[len(self._detected_colors)-1].blue()) + ")")
+						w.setStyleSheet("background-color: rgb(" + str(self._detected_colors[len(self._detected_colors)-1].red()) + ", " + str(self._detected_colors[len(self._detected_colors)-1].green()) + ", " + str(self._detected_colors[len(self._detected_colors)-1].blue()) + ")")
 						break
 			else:
 				print "Invalid color selected!"
@@ -65,21 +66,12 @@ class UIDefineNewColorWidget(QWidget):
 		if self.dlgSaveColors.exec_():
 			# open new color file
 			filename = self.dlgSaveColors.selectedFiles()[0]
-			if not filename.endswith(".clr"):
+			if not filename.endsWith(".clr"):
 				filename += ".clr"
 			color_file = open(filename, "w")
-			# get max and min HSV thresholds and pass them to main application window
-			hsv_threshold_max = (0,0,0)
-			hsv_threshold_min = (255,255,255)
+
+			# save selected colors to file
 			for color in self._detected_colors:
-				hsv = color.getHsv()
-				hsv_threshold_max = (max(hsv_threshold_max[0], hsv[0]), max(hsv_threshold_max[1], hsv[1]), max(hsv_threshold_max[2], hsv[2]))
-				hsv_threshold_min = (min(hsv_threshold_min[0], hsv[0]), min(hsv_threshold_min[1], hsv[1]), min(hsv_threshold_min[2], hsv[2]))
-			color_file.write("max_hue=" + str(hsv_threshold_max[0]) + "\n")
-			color_file.write("max_sat=" + str(hsv_threshold_max[1]) + "\n")
-			color_file.write("max_value=" + str(hsv_threshold_max[2]) + "\n")
-			color_file.write("min_hue=" + str(hsv_threshold_min[0]) + "\n")
-			color_file.write("min_sat=" + str(hsv_threshold_min[1]) + "\n")
-			color_file.write("min_value=" + str(hsv_threshold_min[2]) + "\n")
+				color_file.write(str((color.getRgb())[:-1]) + "\n")
 			color_file.close()
 			self._main_window_ref.updateColorFileName(filename)
