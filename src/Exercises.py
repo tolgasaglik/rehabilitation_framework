@@ -18,6 +18,7 @@ from threading import Thread
 from time import sleep
 import signal
 from rehabilitation_framework.msg import * 
+import random
 
 #                 |y=-0.1
 #        D        |      A
@@ -160,7 +161,7 @@ class VideoReader(Thread):
 			#self.set_kill_thread()
 	
                 # Minimum required radius of enclosing circle of contour
-                MIN_RADIUS = 40
+                MIN_RADIUS = 25
 
                 # read frames from the capture device until interruption
                 while not self._kill_thread:
@@ -219,9 +220,6 @@ class VideoReader(Thread):
 			return self._frame
 
 class EncouragerUnit(object):
-	_repetitions = 0
-	_repetitions_limit = 0
-	_sentences = []
 	ENC_SENT_FILELOC = "/config/encouragement_sentences.txt"
 
 	@property
@@ -242,16 +240,21 @@ class EncouragerUnit(object):
 		else:
 			raise ValueError("Argument spawn_ros_nodes is not boolean!")
 
-	def __init__(self, repetitions_limit=10, spawnRosNodes=False):
+	def __init__(self, repetitions_limit=10, spawnRosNodes=False, quantitative_frequency=0, qualitative_frequency=0, emotional_feedbacks=[]):
 		self._spawn_ros_nodes = spawnRosNodes
 		self._ros_nodes_ready = False
 		if self.spawn_ros_nodes:
 			self.start_ros_nodes()
 		rospy.init_node('encourager')
-		self._pub = rospy.Publisher('/robot/voice', String, queue_size=1)
-		self._pub_face = rospy.Publisher('/qt_face/setEmotion', String, queue_size=1)
+		self._voice_pub = rospy.Publisher('/robot/voice', String, queue_size=1)
+		self._face_pub = rospy.Publisher('/qt_face/setEmotion', String, queue_size=1)
 		self.load_sentences()
 		self._repetitions_limit = repetitions_limit
+		self._emotional_feedbacks = emotional_feedbacks
+		self._quantitative_frequency = quantitative_frequency
+		self._qualitative_frequency = qualitative_frequency
+		random.seed()
+		
 
 	def reset_repetitions_counter(self):
 		self._repetitions_counter = 0
@@ -295,23 +298,26 @@ class EncouragerUnit(object):
 
 	def inc_repetitions_counter(self):
 		self._repetitions += 1
-		self._pub.publish(str(self.repetitions))
 		print "Current number of repetitions done: " +str(self._repetitions)
-		if self._repetitions == 1:
-			self._pub_face.publish('happy')
-			
-		if self._repetitions == self._repetitions_limit/2:
-			self._pub.publish(self._sentences[0])
-			print self._sentences[0]
-		elif self._repetitions == self._repetitions_limit-1:
-			self._pub.publish(self._sentences[1])
-			print self._sentences[1]
-		elif self._repetitions == self._repetitions_limit:
-			self._pub.publish(self._sentences[2])
-			print self._sentences[2]
+
+		# process emotional feedbacks (= show an emotion on the QT robot face)
+		for efb in self._emotional_feedbacks:
+			# is feedback fixed? (yes/no)
+			if efb[0] == True and self._repetitions == efb[1]:
+				self._pub_face.publish(efb[2])
+			elif efb[0] == False and self._repetitions % efb[1] == 0 and self._repetitions > 0:
+				self._pub_face.publish(efb[2])
+
+		# process quantitative feedback (= tell patient how many repetitions he has done so far)
+		if self._quantitative_frequency > 0 and self._repetitions in range(0,self._repetitions_limit-1) and self._repetitions % self._quantitative_frequency == 0:
+			self._pub.publish(str(self.repetitions))
+
+		# process qualitative feedback (= tell patient some randomly chosen motivational sentence)
+		if self._qualitative_frequency > 0 and self._repetitions in range(0,self._repetitions_limit-1) and self._repetitions % self._qualitative_frequency == 0:
+			self._pub.publish(self._sentences[random.randint(0,len(self._sentences))])
 
 	def say(self, sentence):
-		self._pub.publish(sentence)
+		self._voice_pub.publish(sentence)
 		print "The robot says: \"" + sentence + "\""
 
 
@@ -347,13 +353,16 @@ class Exercise:
 			self._calibration_points_left_arm = []
 			self._calibration_points_right_arm = []
 		self.calibration_output_file = calibration_output_file
-		#self.calibration_file = calibration_file
 		self.camera_resolution = camera_resolution
 		self.limb = Limb.LEFT_ARM
 		self._number_of_blocks = number_of_blocks
 		self.robot_position = robot_position
 		self.time_limit = time_limit
 		self._spawn_nodes = spawn_ros_nodes
+
+		temp_quant_freq = 0
+		temp_quali_freq = 0
+		temp_emotional_feedbacks = []
 
 		# retrieve settings from parameter server
                 if rospy.has_param('/reha_exercise/camera_width') and rospy.has_param('/reha_exercise/camera_height'):
@@ -363,7 +372,7 @@ class Exercise:
                 if rospy.has_param('/reha_exercise/rgb_colors'):
                         rgb_colors = rosparam.get_param("/reha_exercise/rgb_colors")
 		else:
-			rospy.logerr("Required parameter rgb_colors is not set on server! Aborting")
+			rospy.logerr("Required parameter rgb_colors is not set on server! Aborting.")
 			sys.exit()
                 if rospy.has_param('/reha_exercise/number_of_blocks'):
                         self._number_of_blocks = rosparam.get_param("/reha_exercise/number_of_blocks")
@@ -373,10 +382,19 @@ class Exercise:
                         self._time_limit = rosparam.get_param("/reha_exercise/time_limit")
                 if rospy.has_param('/reha_exercise/calibration_duration'):
                         self._calibration_duration = rosparam.get_param("/reha_exercise/calibration_duration")
+                if rospy.has_param('/reha_exercise/quantitative_frequency'):
+                        temp_quant_freq = rosparam.get_param("/reha_exercise/quantitative_frequency")
+                if rospy.has_param('/reha_exercise/qualitative_frequency'):
+			temp_quali_freq = rosparam.get_param("/reha_exercise/qualitative_frequency")
+                if rospy.has_param('/reha_exercise/calibration_points_left_arm') and rospy.has_param('/reha_exercise/calibration_points_left_arm'):
+			self._calibration_points_left_arm = rosparam.get_param("/reha_exercise/calibration_points_left_arm")
+			self._calibration_points_right_arm = rosparam.get_param("/reha_exercise/calibration_points_right_arm")
+                if rospy.has_param('/reha_exercise/emotional_feedbacks'):
+			temp_emotional_feedbacks = rosparam.get_param("/reha_exercise/emotional_feedbacks")
 
                 self._video_reader = VideoReader(rgb_colors, camera_resolution)
                	self._video_reader.start()
-		self._encourager = EncouragerUnit(self.repetitions_limit, spawnRosNodes=self._spawn_nodes)
+		self._encourager = EncouragerUnit(self.repetitions_limit, spawnRosNodes=self._spawn_nodes, quantitative_frequency=temp_quant_freq, qualitative_frequency=temp_quali_freq, emotional_feedbacks=temp_emotional_feedbacks)
 		sleep(0.2)	# wait some miliseconds until the video reader grabs its first frame from the capture device
 
 		# define tolerance values for both axis when calibrating manually
@@ -386,21 +404,6 @@ class Exercise:
 			self._tolerance_x = camera_resolution[0] / 6
 		elif 2*camera_resolution[0] < camera_resolution[1]:
 			self._tolerance_y = camera_resolution[1] / 6
-
-		# load calibration data from file, if given
-		#if self.calibration_file != "":
-		#	calib_fileptr = open(self.calibration_file, "r")
-		#	next_line = calib_fileptr.readLine()
-		#	while next_line != "":
-		#		if next_line == "[left_arm]":
-		#			self._calibration_points_left_arm = ast.literal_eval(calib_fileptr.readLine())
-		#		elif next_line == "[right_arm]":
-		#			self._calibration_points_right_arm = ast.literal_eval(calib_fileptr.readLine())
-		#		else:
-		#			raise ValueError("Invalid file contents! No valid header detected!")
-		#		next_line = calib_fileptr.readLine()
-		#	calib_fileptr.close()
-
 
 
 	# ****************************** property definitions for the base class ******************************
@@ -621,10 +624,10 @@ class SimpleMotionExercise(Exercise):
 
 
 	def calibrate(self):
+		print str(self)
 		# check if capture device running
                 if not (self._video_reader.is_alive()):
-			return 1
-			#raise Exception("Capture device not initialized!")
+			raise Exception("Capture device not initialized!")
 
 		# define number of calibration points to record (depends on exercise)
 		number_of_calibration_points = 0
@@ -671,8 +674,8 @@ class SimpleMotionExercise(Exercise):
 			if timer == None and no_center_found_counter < NO_CENTER_FOUND_MAX:
 				timer = Timer(self.calibration_duration)
 				timer.start()
-				if (self._limb == Limb.LEFT_ARM and len(self._calibration_points_left_arm) > 0) or (self._limb == Limb.RIGHT_ARM and len(self._calibration_points_right_arm) > 0):
-					encourager_guide_flag = True
+				#if (self._limb == Limb.LEFT_ARM and len(self._calibration_points_left_arm) > 0) or (self._limb == Limb.RIGHT_ARM and len(self._calibration_points_right_arm) > 0):
+				encourager_guide_flag = True
 
 			# if no object was found in the video capture for some time, wait for object to reappear
 			if self._video_reader.center != None:
@@ -696,9 +699,8 @@ class SimpleMotionExercise(Exercise):
 							# take last valid centroid that was found by video reader and store coordinates
 							self._calibration_points_left_arm.append(self._video_reader.last_valid_center)
 							# switch to right arm when all points for the left arm have been calibrated
-							if self._calibration_points_left_arm == number_of_calibration_points:
+							if len(self._calibration_points_left_arm) == number_of_calibration_points:
 								self.limb = Limb.RIGHT_ARM
-							encourager_guide_flag = True
 					else:
 						# else, check if calibration point is valid for the right arm
 						if len(self._calibration_points_right_arm) > 0 and (self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.ABDUCTION and (abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[0]-self._video_reader.center[0]) < self._tolerance_x) \
@@ -709,8 +711,8 @@ class SimpleMotionExercise(Exercise):
 						elif no_center_found_counter == 0:
 							# take last valid centroid that was found by video reader and store coordinates
 							self._calibration_points_right_arm.append(self._video_reader.last_valid_center)
-							encourager_guide_flag = True
-					timer = None
+							print(len(self._calibration_points_right_arm))
+		rospy.has_param('to_delete'):			timer = None
 			elif no_center_found_counter < NO_CENTER_FOUND_MAX:
 				no_center_found_counter += 1
 			elif no_center_found_counter == NO_CENTER_FOUND_MAX and timer != None and timer.is_alive() and not no_center_found_flag:
@@ -724,19 +726,21 @@ class SimpleMotionExercise(Exercise):
 			# display images and quit loop if "q"-key was pressed
 			cv2.imshow("Original image", self._video_reader.img_original)
 			cv2.imshow("Detected blobs", self._video_reader.img_modified)
-			if cv2.waitKey(1) & 0xFF == ord('q'):
+			if cv2.waitKey(1) & 0xFF == ord('q') or len(self._calibration_points_right_arm) == number_of_calibration_points:
+				rospy.loginfo("Shutting down video reader...")
 				self._video_reader.set_kill_thread()
 				self._video_reader.join()
 			if not self._video_reader.is_alive():
 				if timer != None:
+					rospy.loginfo("Shutting down timer thread...")
 					timer.kill_timer()
 					timer.join()
 				cv2.destroyAllWindows()
-				return 2
-		self._encourager.say("Calibration completed!")
+				break
 
 		# write calibration results to file, if property set
-		if self._calibration_output_file != "":
+		if self._calibration_output_file != "" and len(self._calibration_points_left_arm) == number_of_calibration_points and len(self._calibration_points_right_arm) == number_of_calibration_points:
+			self._encourager.say("Calibration completed!")
 			with open(self._calibration_output_file, "w") as calib_output_file:
 				calib_output_file.write("motion_type=" + str(self._motion_type) + "\n")
 				calib_output_file.write("rotation_type=0\n")
@@ -745,6 +749,8 @@ class SimpleMotionExercise(Exercise):
 				calib_output_file.write("camera_height=" + str(self._video_reader.camera_resolution[1]) + "\n")
 				calib_output_file.write("calibration_points_left_arm=" + str(self._calibration_points_left_arm)+ "\n")
 				calib_output_file.write("calibration_points_right_arm=" + str(self._calibration_points_right_arm)+ "\n")
+		else:
+			self._encourager.say("Calibration failed/interrupted!")
 
 
 
@@ -752,41 +758,38 @@ class SimpleMotionExercise(Exercise):
 # *********************************** MAIN PROGRAM ***********************************
 # ************************************************************************************
 if __name__ == '__main__':
-	# use the "rospy.myargv" argument vector instead of the built-in "sys.argv" to avoid problems with ROS argument re-mapping
-	# (reason: https://groups.google.com/a/rethinkrobotics.com/forum/#!topic/brr-users/ErXVWhRmtNA)
-	#exercise = process_args(rospy.myargv()[1:])
-	#result = exercise.calibrate()
-	#if result == 0: 
-	#       exercise.start_game()
-
 	# parse command-line arguments
 	parser = argparse.ArgumentParser(description='Reads video footage from a camera or a video file, and performs the Rehazenter exercise on it.')
 	parser.add_argument('--calibrate_only', action="store_true", dest="calibrate_only", help='pass this argument if you only wish to perform the calibration process and not the exercise')
 	parser.add_argument('--calibration_output_file', type=str, dest="calibration_output_file", default="", help='resulting file from the calibration process will be stored in this file path')
+
+	# use the "rospy.myargv" argument vector instead of the built-in "sys.argv" to avoid problems with ROS argument re-mapping
+	# (reason: https://groups.google.com/a/rethinkrobotics.com/forum/#!topic/brr-users/ErXVWhRmtNA)
 	args = parser.parse_args(rospy.myargv()[1:])
 
-	# retrieve most important parameters from server
-	try:
-		ros_calibration_duration = rosparam.get_param("/reha_exercise/calibration_duration")
-		ros_camera_width = rosparam.get_param("/reha_exercise/camera_width")
-		ros_camera_height = rosparam.get_param("/reha_exercise/camera_height")
-		ros_robot_position = rosparam.get_param("/reha_exercise/robot_position")
-		ros_rgb_colors = rosparam.get_param("/reha_exercise/rgb_colors")
+	# parameters checking
+	if not (rosparam.has_param("/reha_exercise/calibration_duration") and rosparam.has_param("/reha_exercise/camera_width") and rosparam.has_param("/reha_exercise/camera_height") and rosparam.has_param("/reha_exercise/robot_position") and rosparam.has_param("/reha_exercise/rgb_colors") and rosparam.has_param("/reha_exercise/motion_type") and rosparam.has_param("/reha_exercise/rotation_type")):	
+		rospy.logerr("ERROR: not all required parameters are set on the parameter server for calibration! Aborting.")
+		sys.exit()
+	else:
 		ros_motion_type = rosparam.get_param("/reha_exercise/motion_type")
 		ros_rotation_type = rosparam.get_param("/reha_exercise/rotation_type")
-	except KeyError:
-		rospy.logerr("ERROR: not all required parameters are set on the parameter server! Aborting.")
-		sys.exit()
-	if args.calibrate_only:
-		if ros_motion_type == 0 and ros_rotation_type > 0:
-			exercise = RotationExercise(calibration_duration=ros_calibration_duration, camera_resolution=(ros_camera_width,ros_camera_height), robot_position=ros_robot_position, calibration_output_file=args.calibration_output_file, rotation_type=ros_rotation_type)
-		elif ros_motion_type > 0 and ros_rotation_type == 0:
-			exercise = SimpleMotionExercise(calibration_duration=ros_calibration_duration, camera_resolution=(ros_camera_width,ros_camera_height), robot_position=ros_robot_position, calibration_output_file=args.calibration_output_file, motion_type=ros_rotation_type)
-		else:
+		if not args.calibrate_only and not (rosparam.has_param("/reha_exercise/quantitative_frequency") and rosparam.has_param("/reha_exercise/qualitative_frequency") and rosparam.has_param("/reha_exercise/calibration_points_left_arm") and rosparam.has_param("/reha_exercise/calibration_points_left_arm") and rosparam.has_param("/reha_exercise/emotional_feedbacks")):
+			rospy.logerr("ERROR: not all required parameters are set on the parameter server for the exercise! Aborting.")
+			sys.exit()
+		elif not (ros_motion_type == 0 and ros_rotation_type > 0 or ros_motion_type > 0 and ros_rotation_type == 0):
 			rospy.logerr("ERROR: parameter server contains invalid exercise parameters! Aborting.")
 			sys.exit()
+		elif args.calibrate_only and args.calibration_output_file != "":
+			rospy.logerr("ERROR: Output calibration file path not set!")
+			sys.exit()
+	if ros_motion_type == 0 and ros_rotation_type > 0:
+		exercise = RotationExercise()
+	else:
+		exercise = SimpleMotionExercise()
+	if args.calibrate_only:
 		exercise.calibrate()
-	#else:
-		# TODO: retrieve encouragement and facial feedback parameters
+	else:
+		exercise.start_game()
 	exercise.stop_game()
 	sys.exit()

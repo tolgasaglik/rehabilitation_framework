@@ -11,5 +11,5 @@
 	
 	<node pkg="sound_play" type="soundplay_node.py" name="sound_play" />
 	<node pkg="wm_voice_generator" type="wm_voice_component_short.py" name="wm_voice_generator" />
-	<node pkg="rehabilitation_framework" type="Exercises.py" name="rehabilitation_framework" args="--calibrate_only --calibration_output_file $(arg calibration_output_file)" output="screen" />
+	<node pkg="rehabilitation_framework" type="Exercises.py" name="rehabilitation_framework" required="true" args="--calibrate_only --calibration_output_file $(arg calibration_output_file)" output="screen" />
 </launch>

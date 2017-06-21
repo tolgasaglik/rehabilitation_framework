@@ -48,11 +48,9 @@ find_package(catkin REQUIRED COMPONENTS
 add_message_files(
    FILES
    CalibrationPoint.msg
-   CalibrationPointList.msg
    ExerciseInit.msg
    FacialFeedback.msg
    RGBColor.msg
-   RGBColorList.msg
 )
 
 ## Generate services in the 'srv' folder

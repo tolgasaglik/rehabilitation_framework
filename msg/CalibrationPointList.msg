@@ -1,1 +1,0 @@
-CalibrationPoint[] calibration_points

@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*)-
 
 # Form implementation generated from reading ui file 'self.UI.ui'
 #
@@ -25,7 +25,7 @@ import DefineNewColor
 
 def load_color_file(filename):
 	rgb_color_fileptr = open(filename, "r")
-	colors = RGBColorList()
+	colors = []
 	for line in rgb_color_fileptr.readlines():
 		to_array = ast.literal_eval(line)
 		assert len(to_array) == 3
@@ -33,9 +33,31 @@ def load_color_file(filename):
 		color.red = to_array[0]
 		color.green = to_array[1]
 		color.blue = to_array[2]
-		colors.rgb_color_list.append(color)
+		colors.append(color)
 	rgb_color_fileptr.close()
 	return colors
+
+def load_calib_file(filename):
+	calib_fileptr = open(filename, "r")
+	calibration_points_left_arm = []
+	calibration_points_right_arm = []
+	for line in calib_fileptr,readline():
+		if line.startswith("left_arm="):
+			cb_points_from_file = ast.literal_eval(line[9:])
+		elif line.startswith("right_arm="):
+			cb_points_from_file = ast.literal_eval(line[10:])
+		else:
+			raise ValueError("Invalid file contents!")
+		for cb_point in cb_points_from_file:
+			point_to_add = CalibrationPoint()
+			point_to_add.x = cb_point[0]
+			point_to_add.y = cb_point[1]
+		if line.startswith("left_arm="):
+			calibration_points_left_arm.append(point_to_add)
+		else:
+			calibration_points_right_arm.append(point_to_add)
+	calib_fileptr.close()
+	return (calibration_points_left_arm, calibration_points_right_arm)
 
 
 class QTRehaZenterGUI(QtGui.QMainWindow):
@@ -71,7 +93,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	# initialize calibration file save dialog
 	self.dlgSaveCalibFile = QFileDialog()
 	self.dlgSaveCalibFile.setFileMode(QFileDialog.AnyFile)
-	self.dlgSaveCalibFile.setFilter("Calibration files (*.cal)")
+	self.dlgSaveCalibFile.setFilter("Calibration files (*.clb)")
 	self.dlgSaveCalibFile.setAcceptMode(QFileDialog.AcceptSave)
 
 	# initialize rotation exercises warning message box
@@ -81,6 +103,13 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	self.msgRotationExercises.setInformativeText("Please choose one of the motion exercises instead until rotation exercises become available.")
 	self.msgRotationExercises.setWindowTitle("Rotation exercises warning")
 	self.msgRotationExercises.setStandardButtons(QMessageBox.Ok)
+
+	# initialize calibration fail message box
+	self.msgCalibrationInterrupted = QMessageBox()
+	self.msgCalibrationInterrupted.setIcon(QMessageBox.Warning)
+	self.msgCalibrationInterrupted.setText("Calibration was interrupted! Please try to calibrate again.")
+	self.msgCalibrationInterrupted.setWindowTitle("Calibration interrupted")
+	self.msgCalibrationInterrupted.setStandardButtons(QMessageBox.Ok)
 
 	# initialize list of faces (in string form)
 	self._faces_list = ["sad", "happy", "crying"]
@@ -97,11 +126,16 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	self.btnAddLine.setEnabled(False)
 
 	# resize table columns to match their text size
-	self.tblFacialFeedback.setColumnCount(3)
-	header = self.tblFacialFeedback.horizontalHeader()
+	self.tblEmotionalFeedback.setColumnCount(3)
+	header = self.tblEmotionalFeedback.horizontalHeader()
 	header.setResizeMode(0, QHeaderView.Stretch)
 	header.setResizeMode(1, QHeaderView.Stretch)
 	header.setResizeMode(2, QHeaderView.Stretch)
+
+	# initialize ROS publisher topics
+	rospy.init_node("reha_interface", anonymous=True)
+	exercise_init_pub = rospy.Publisher("reha_exercise_init", ExerciseInit)
+	exercise_stop_pub = rospy.Publisher("reha_exercise_stop", Bool)
 
 	# connect functions to widgets
 	self.btnInternalRotationExercise.clicked.connect(self.btnInternalRotationExerciseClicked)
@@ -118,7 +152,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	self.cmbFaces.currentIndexChanged.connect(self.cmbFacesCurrentIndexChanged)
 	self.actionQuit.triggered.connect(self.closeEvent)
 	self.btnDeleteLine.clicked.connect(self.btnDeleteLineClicked)
-	self.tblFacialFeedback.itemClicked.connect(self.tblFacialFeedbackItemClicked)
+	self.tblEmotionalFeedback.itemClicked.connect(self.tblEmotionalFeedbackItemClicked)
 	self.chkQualitative.clicked.connect(self.chkQualitativeClicked)
 	self.chkQuantitative.clicked.connect(self.chkQuantitativeClicked)
 	self.btnLoadColorFile.clicked.connect(self.btnLoadColorFileClicked)
@@ -181,10 +215,6 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 
 	# spawn exercise subprocess
 	self.txtViewLogOutput.appendPlainText("******************** BEGIN EXERCISE ********************")
-	#launch_params = ['roslaunch', 'reha_game', 'Exercise_Launcher.launch']
-	#launch_params.extend(('width:='+str(self.spnWidth.value()), 'height:='+str(self.spnHeight.value()), 'color:=yellow', 'number_of_repetitions:='+str(self.spnNbrRepetitions.value()), "time_limit:="+str(self.spnTimeLimit.value()), 'calibration_duration:='+str(self.spnCalibDuration.value())))
-	pub = rospy.Publisher("Reha_ExerciseInit", ExerciseInit)
-	rospy.init_node("Reha_ExerciseNode", anonymous=True)
 	msg = ExerciseInit()
 
 	# build exercise init message
@@ -193,26 +223,40 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	msg.blocks = self.slNbrBlocks.value()
 	msg.repetitions = self.spnTimeLimit.value()
 	msg.calibration_duration = self.spnCalibDuration.value()
-	msg.quantitative_enabled = self.chkQuantitative.isChecked()
-	msg.quantitative_frequency = self.spnQuantEncRep.value()
-	msg.qualitative_enabled = self.chkQualitative.isChecked()
+	if self.chkQuantitative.isChecked():
+		msg.quantitative_frequency = self.spnQuantEncRep.value()
+	else:
+		msg.quantitative_frequency = 0
+	if self.chkQualitative.isChecked():
+		if self.cmbQualiEnc.text() == "high":
+			msg.qualitative_frequency = 3
+		elif self.cmbQualiEnc.text() == "medium":
+			msg.qualitative_frequency = 2
+		else:
+			msg.qualitative_frequency = 1
+	else:
+		msg.qualitative_frequency = 0
 	msg.qualitative_frequency = self.spnQualiEnc.value()
 	msg.robot_position = self.cmbRobotPosition.currentIndex()
 	msg.rotation_type = 0
+	msg.emotional_feedback_list = []
+	for(i=0, i<self.tblEmotionalFeedback.columnCount(), i++)
+		emotional_feedback = EmotionalFeedback()
+		emotional_feedback.is_fixed_feedback = (str(self.tblEmotionalFeedback.item(i, 0).text()) == "fixed")
+		emotional_feedback.repetitions = int(self.tblEmotionalFeedback.item(i, 1).text()
+		emotional_feedback.face_to_show = str(self.tblEmotionalFeedback.item(i, 0).text())
+		msg.emotional_feedback_list.append(emotional_feedback)
+	msg.rgb_colors = load_color_file(str(self.lnColorFile.text()))
+	self.exercise_init_pub.publish(msg)
+	calib_data = load_calib_file(self.lnCalibFile.text())
+	msg.calibration_points_left_arm = calib_data[0]
+	msg.calibration_points_right_arm = calib_data[1]
+	self._exercise_init_pub.publish(msg)
+	self.txtViewLogOutput.appendPlainText("Current exercise configuration:\n" + str(msg))
 	
-
-	#if self.btnFlexionMotionExercise.isChecked():
-		#launch_params.extend(('motion_type:=0'))
-	#elif self.btnAbductionMotionExercise.isChecked():
-		#launch_params.extend(('motion_type:=1'))
-	#self.exercise_process = Popen(launch_params)
-
     def btnStopClicked(self):
 	# stop exercise subprocess and kill ROS console worker thread
-	#self.exercise_process.communicate(input="q")
-        self.exercise_process.terminate()
-	self.exercise_process.wait()
-	self.exercise_process = None
+	self.exercise_stop_pub.publish(True)
 
 	# enable all other buttons again
 	self.btnFlexionMotionExercise.setEnabled(True)
@@ -256,17 +300,14 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 		self.btnAddLine.setEnabled(False)
 
     def btnDeleteLineClicked(self):
-	self.tblFacialFeedback.removeRow(self.tblFacialFeedback.currentRow())
+	self.tblEmotionalFeedback.removeRow(self.tblEmotionalFeedback.currentRow())
 	self.btnDeleteLine.setEnabled(False)
 
     def btnCalibrateNowClicked(self):
 	if self.dlgSaveCalibFile.exec_():
 		# create calibration service request message
 		request = CalibrationRequest()
-		if str(self.cmbCreateCalibFileFor.currentText()) == "flexion exercise":
-			request.motion_type = 1
-			request.rotation_type = 0
-		elif str(self.cmbCreateCalibFileFor.currentText()) == "abduction exercise":
+		if str(self.cmbCreateCalibFileFor.currentText()) == "flexion exercise" or str(self.cmbCreateCalibFileFor.currentText()) == "abduction exercise":
 			request.motion_type = 1
 			request.rotation_type = 0
 		else:
@@ -287,7 +328,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 		request.camera_width = self.spnWidth.value()
 		request.camera_height = self.spnHeight.value()
 
-		# publish request to service
+		# publish request to service and wait for response
 		rospy.wait_for_service('calibrate')
 		try:
 			calibrate = rospy.ServiceProxy('calibrate', Calibration)
@@ -298,23 +339,26 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 			return
 
 		# write calibration points to file
-		filename = self.dlgSaveCalibFile.selectedFiles()[0]
-		if not filename.endsWith(".clb"):
-			filename += ".clb"
-		calib_fileptr = open(filename, "w")
-		calib_fileptr.write("motion_type=" + str(request.motion_type) + "\n")
-		calib_fileptr.write("rotation_type=" + str(request.rotation_type) + "\n")
-		calib_fileptr.write("robot_position=" + str(request.robot_position) + "\n")
-		calib_fileptr.write("calibration_points_left_arm=" + str(response.calibration_points_left_arm)+ "\n")
-		calib_fileptr.write("calibration_points_right_arm=" + str(response.calibration_points_right_arm)+ "\n")
-		calib_fileptr.close()
+		if response.status == 0:
+			filename = self.dlgSaveCalibFile.selectedFiles()[0]
+			if not filename.endsWith(".clb"):
+				filename += ".clb"
+			calib_fileptr = open(filename, "w")
+			calib_fileptr.write("motion_type=" + str(request.motion_type) + "\n")
+			calib_fileptr.write("rotation_type=" + str(request.rotation_type) + "\n")
+			calib_fileptr.write("robot_position=" + str(request.robot_position) + "\n")
+			calib_fileptr.write("calibration_points_left_arm=" + str(response.calibration_points_left_arm.data)+ "\n")
+			calib_fileptr.write("calibration_points_right_arm=" + str(response.calibration_points_right_arm.data)+ "\n")
+			calib_fileptr.close()
+		else:
+			self.msgCalibrationInterrupted.exec_()	
 	
 
-    def tblFacialFeedbackItemClicked(self):
+    def tblEmotionalFeedbackItemClicked(self):
 	self.btnDeleteLine.setEnabled(True)
 
     def btnAddLineClicked(self):
-	self.tblFacialFeedback.insertRow(self.tblFacialFeedback.rowCount())
+	self.tblEmotionalFeedback.insertRow(self.tblEmotionalFeedback.rowCount())
 	if self.rdFixed.isChecked():
 		typeText = "fixed"
 		repetitionsText = str(self.spnFixedReps.value())
@@ -324,9 +368,9 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 	else:
 		raise Exception("error when selecting facial feedback, this is not supposed to happen...")
 	faceText = self.cmbFaces.currentText()
-	self.tblFacialFeedback.setItem(self.tblFacialFeedback.rowCount()-1, 0, QTableWidgetItem(typeText))
-	self.tblFacialFeedback.setItem(self.tblFacialFeedback.rowCount()-1, 1, QTableWidgetItem(repetitionsText))
-	self.tblFacialFeedback.setItem(self.tblFacialFeedback.rowCount()-1, 2, QTableWidgetItem(faceText))
+	self.tblEmotionalFeedback.setItem(self.tblEmotionalFeedback.rowCount()-1, 0, QTableWidgetItem(typeText))
+	self.tblEmotionalFeedback.setItem(self.tblEmotionalFeedback.rowCount()-1, 1, QTableWidgetItem(repetitionsText))
+	self.tblEmotionalFeedback.setItem(self.tblEmotionalFeedback.rowCount()-1, 2, QTableWidgetItem(faceText))
 	self.spnFixedReps.setEnabled(False)
 	self.spnFrequencyReps.setEnabled(False)
 	self.rdFixed.setChecked(False)

@@ -302,7 +302,7 @@
   <widget class="QPushButton" name="btnSaveColors">
    <property name="geometry">
     <rect>
-     <x>810</x>
+     <x>850</x>
      <y>540</y>
      <width>160</width>
      <height>37</height>
@@ -335,7 +335,7 @@
    <property name="geometry">
     <rect>
      <x>550</x>
-     <y>350</y>
+     <y>380</y>
      <width>451</width>
      <height>141</height>
     </rect>
@@ -348,6 +348,19 @@
    </property>
    <property name="text">
     <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:11pt;&quot;&gt;Press, the &amp;quot;&lt;/span&gt;&lt;span style=&quot; font-size:11pt; font-style:italic;&quot;&gt;Load image...&lt;/span&gt;&lt;span style=&quot; font-size:11pt;&quot;&gt;&amp;quot; button and select&lt;br/&gt;an image on your system. You may then&lt;br/&gt;click on the &lt;/span&gt;&lt;span style=&quot; font-size:11pt; font-weight:600;&quot;&gt;pixels&lt;/span&gt;&lt;span style=&quot; font-size:11pt;&quot;&gt; in the image to use&lt;br/&gt;those particular color values for detection.&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="btnClearColors">
+   <property name="geometry">
+    <rect>
+     <x>560</x>
+     <y>330</y>
+     <width>160</width>
+     <height>37</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Clear colors</string>
    </property>
   </widget>
  </widget>

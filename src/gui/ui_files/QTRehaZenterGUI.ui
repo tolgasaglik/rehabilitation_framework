@@ -640,14 +640,19 @@
                 <enum>Qt::LeftToRight</enum>
                </property>
                <property name="maxVisibleItems">
-                <number>2</number>
+                <number>3</number>
                </property>
                <property name="maxCount">
-                <number>2</number>
+                <number>3</number>
                </property>
                <item>
                 <property name="text">
                  <string>high</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>medium</string>
                 </property>
                </item>
                <item>
@@ -1269,7 +1274,7 @@ selected line</string>
      <x>0</x>
      <y>0</y>
      <width>659</width>
-     <height>28</height>
+     <height>25</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuEdit">

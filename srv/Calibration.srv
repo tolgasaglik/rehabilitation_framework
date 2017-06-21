@@ -8,5 +8,6 @@ uint16 camera_width
 uint16 camera_height
 ---
 # response message
+uint8 status
 CalibrationPointList calibration_points_left_arm
 CalibrationPointList calibration_points_right_arm

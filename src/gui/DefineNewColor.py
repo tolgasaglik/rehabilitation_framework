@@ -22,21 +22,13 @@ class UIDefineNewColorWidget(QWidget):
                 self.dlgSaveColors.setFilter("Color files (*.clr)")
                 self.dlgSaveColors.setAcceptMode(QFileDialog.AcceptSave)
 
-		# initialize image graphics view
-		self._imageScene = QGraphicsScene()
-		self._detected_colors = []
-		self._detected_colors_index = -1
-
-		# make QGraphicsView objects invisible on startup
-
-		widgets = (self.gridLayoutColors.itemAt(i).widget() for i in range(self.gridLayoutColors.count()))
-                for w in widgets:
-			if isinstance(w, QGraphicsView):
-				w.setVisible(False)
-		
-		# TODO: connect buttons to functions
+		# initialize graphics view objects and color array
+		self.btnClearColorsClicked()
+	
+		# connect buttons to functions
 		self.btnLoadImage.clicked.connect(self.btnLoadImageClicked)
 		self.btnSaveColors.clicked.connect(self.btnSaveColorsClicked)
+		self.btnClearColors.clicked.connect(self.btnClearColorsClicked)
 
 	def btnLoadImageClicked(self):
 		if self.dlgLoadImage.exec_():
@@ -75,3 +67,15 @@ class UIDefineNewColorWidget(QWidget):
 				color_file.write(str((color.getRgb())[:-1]) + "\n")
 			color_file.close()
 			self._main_window_ref.updateColorFileName(filename)
+
+	def btnClearColorsClicked(self):
+		# initialize image graphics view
+		self._imageScene = QGraphicsScene()
+		self._detected_colors = []
+		self._detected_colors_index = -1
+
+		# make QGraphicsView objects invisible on startup
+		widgets = (self.gridLayoutColors.itemAt(i).widget() for i in range(self.gridLayoutColors.count()))
+                for w in widgets:
+			if isinstance(w, QGraphicsView):
+				w.setVisible(False)
