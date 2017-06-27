@@ -49,7 +49,7 @@ add_message_files(
    FILES
    CalibrationPoint.msg
    ExerciseInit.msg
-   FacialFeedback.msg
+   EmotionalFeedback.msg
    RGBColor.msg
 )
 

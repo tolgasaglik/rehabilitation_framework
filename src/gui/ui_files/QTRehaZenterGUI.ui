@@ -303,6 +303,9 @@
             <verstretch>0</verstretch>
            </sizepolicy>
           </property>
+          <property name="readOnly">
+           <bool>true</bool>
+          </property>
          </widget>
         </item>
        </layout>
@@ -640,19 +643,14 @@
                 <enum>Qt::LeftToRight</enum>
                </property>
                <property name="maxVisibleItems">
-                <number>3</number>
+                <number>2</number>
                </property>
                <property name="maxCount">
-                <number>3</number>
+                <number>2</number>
                </property>
                <item>
                 <property name="text">
                  <string>high</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>medium</string>
                 </property>
                </item>
                <item>
@@ -812,7 +810,7 @@
               <number>10</number>
              </property>
              <item>
-              <widget class="QTableWidget" name="tblFacialFeedback">
+              <widget class="QTableWidget" name="tblEmotionalFeedback">
                <property name="sizePolicy">
                 <sizepolicy hsizetype="Fixed" vsizetype="Expanding">
                  <horstretch>0</horstretch>
@@ -1274,7 +1272,7 @@ selected line</string>
      <x>0</x>
      <y>0</y>
      <width>659</width>
-     <height>25</height>
+     <height>27</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuEdit">

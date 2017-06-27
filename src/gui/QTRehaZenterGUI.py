@@ -15,402 +15,488 @@ import rospy
 # (source: http://stackoverflow.com/questions/714063/importing-modules-from-parent-folder)
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
-sys.path.insert(0,parentdir) 
+sys.path.insert(0,parentdir)
 from PyQt4 import uic
 import Exercises
 from Exercises import Limb,RotationType,MotionType,RobotPosition
 from rehabilitation_framework.msg import *
 from rehabilitation_framework.srv import *
+from std_msgs.msg import Bool
 import DefineNewColor
 
+# some helper functions
 def load_color_file(filename):
-	rgb_color_fileptr = open(filename, "r")
-	colors = []
-	for line in rgb_color_fileptr.readlines():
-		to_array = ast.literal_eval(line)
-		assert len(to_array) == 3
-		color = RGBColor()
-		color.red = to_array[0]
-		color.green = to_array[1]
-		color.blue = to_array[2]
-		colors.append(color)
-	rgb_color_fileptr.close()
-	return colors
+    rgb_color_fileptr = open(filename, "r")
+    colors = []
+    for line in rgb_color_fileptr.readlines():
+        to_array = ast.literal_eval(line)
+        assert len(to_array) == 3
+        color = RGBColor()
+        color.red = to_array[0]
+        color.green = to_array[1]
+        color.blue = to_array[2]
+        colors.append(color)
+    rgb_color_fileptr.close()
+    return colors
 
 def load_calib_file(filename):
-	calib_fileptr = open(filename, "r")
-	calibration_points_left_arm = []
-	calibration_points_right_arm = []
-	for line in calib_fileptr,readline():
-		if line.startswith("left_arm="):
-			cb_points_from_file = ast.literal_eval(line[9:])
-		elif line.startswith("right_arm="):
-			cb_points_from_file = ast.literal_eval(line[10:])
-		else:
-			raise ValueError("Invalid file contents!")
-		for cb_point in cb_points_from_file:
-			point_to_add = CalibrationPoint()
-			point_to_add.x = cb_point[0]
-			point_to_add.y = cb_point[1]
-		if line.startswith("left_arm="):
-			calibration_points_left_arm.append(point_to_add)
-		else:
-			calibration_points_right_arm.append(point_to_add)
-	calib_fileptr.close()
-	return (calibration_points_left_arm, calibration_points_right_arm)
-
+    calib_fileptr = open(filename, "r")
+    calibration_points_left_arm = []
+    calibration_points_right_arm = []
+    for line in calib_fileptr,readline():
+        if line.startswith("left_arm="):
+            cb_points_from_file = ast.literal_eval(line[9:])
+        elif line.startswith("right_arm="):
+                cb_points_from_file = ast.literal_eval(line[10:])
+        else:
+            raise ValueError("Invalid file contents!")
+    for cb_point in cb_points_from_file:
+        point_to_add = CalibrationPoint()
+        point_to_add.x = cb_point[0]
+        point_to_add.y = cb_point[1]
+        if line.startswith("left_arm="):
+            calibration_points_left_arm.append(point_to_add)
+        else:
+            calibration_points_right_arm.append(point_to_add)
+    calib_fileptr.close()
+    return (calibration_points_left_arm, calibration_points_right_arm)
+#------------------------
 
 class QTRehaZenterGUI(QtGui.QMainWindow):
     def __init__(self):
-	super(QTRehaZenterGUI, self).__init__()
-	uic.loadUi('ui_files/QTRehaZenterGUI.ui', self)
+        super(QTRehaZenterGUI, self).__init__()
+        uic.loadUi('ui_files/QTRehaZenterGUI.ui', self)
+        
+        # initialize custom object loader widget
+        self.defineNewColorWidget = DefineNewColor.UIDefineNewColorWidget(self)
+        
+        # load logo images
+        uniLuLogoScene = QGraphicsScene()
+        imagePixmap_unilu = QGraphicsPixmapItem(QPixmap(QImage("imgs/university_of_luxembourg_logo.png")), None, uniLuLogoScene)
+        self.grUniLuLogo.setScene(uniLuLogoScene)
+        self.grUniLuLogo.fitInView(uniLuLogoScene.sceneRect(), Qt.KeepAspectRatio)
+        rehaZenterLogoScene = QGraphicsScene()
+        imagePixmap_reha = QGraphicsPixmapItem(QPixmap(QImage("imgs/rehazenter_logo.jpg")), None, rehaZenterLogoScene)
+        self.grRehaZenterLogo.setScene(rehaZenterLogoScene)
+        self.grRehaZenterLogo.fitInView(rehaZenterLogoScene.sceneRect(), Qt.KeepAspectRatio)
+        
+        # initialize calibration file selection dialog
+        self.dlgLoadCalibFile = QFileDialog()
+        self.dlgLoadCalibFile.setFileMode(QFileDialog.ExistingFile)
+        self.dlgLoadCalibFile.setFilter("Calibration files (*.clb)")
+        self.dlgLoadCalibFile.setAcceptMode(QFileDialog.AcceptOpen)
+        
+        # initialize color file selection dialog
+        self.dlgLoadColorFile = QFileDialog()
+        self.dlgLoadColorFile.setFileMode(QFileDialog.ExistingFile)
+        self.dlgLoadColorFile.setFilter("Color files (*.clr)")
+        self.dlgLoadColorFile.setAcceptMode(QFileDialog.AcceptOpen)
+        
+        # initialize calibration file save dialog
+        self.dlgSaveCalibFile = QFileDialog()
+        self.dlgSaveCalibFile.setFileMode(QFileDialog.AnyFile)
+        self.dlgSaveCalibFile.setFilter("Calibration files (*.clb)")
+        self.dlgSaveCalibFile.setAcceptMode(QFileDialog.AcceptSave)
+        
+        # initialize rotation exercises warning message box
+        self.msgRotationExercises = QMessageBox()
+        self.msgRotationExercises.setIcon(QMessageBox.Warning)
+        self.msgRotationExercises.setText("Sorry, rotation exercises have not been implemented yet!")
+        self.msgRotationExercises.setInformativeText("Please choose one of the motion exercises instead until rotation exercises become available.")
+        self.msgRotationExercises.setWindowTitle("Rotation exercises warning")
+        self.msgRotationExercises.setStandardButtons(QMessageBox.Ok)
+        
+        # initialize calibration fail message box
+        self.msgCalibrationInterrupted = QMessageBox()
+        self.msgCalibrationInterrupted.setIcon(QMessageBox.Warning)
+        self.msgCalibrationInterrupted.setText("Calibration was interrupted! Please try to calibrate again.")
+        self.msgCalibrationInterrupted.setWindowTitle("Calibration interrupted")
+        self.msgCalibrationInterrupted.setStandardButtons(QMessageBox.Ok)
+        
+        # initialize list of faces (in string form)
+        self._faces_list = ["sad", "happy", "crying"]
+        self.cmbFaces.addItems(self._faces_list)
+        
+        # disable various labels and widgets on startup
+        self.lblPerRepetitions1.setEnabled(False)
+        self.lblPerRepetitions2.setEnabled(False)
+        self.spnQuantEncRep.setEnabled(False)
+        self.cmbQualiEnc.setEnabled(False)
+        self.btnDeleteLine.setEnabled(False)
+        self.spnFixedReps.setEnabled(False)
+        self.spnFrequencyReps.setEnabled(False)
+        self.btnAddLine.setEnabled(False)
+        
+        # resize table columns to match their text size
+        header = self.tblEmotionalFeedback.horizontalHeader()
+        header.setResizeMode(0, QHeaderView.Stretch)
+        header.setResizeMode(1, QHeaderView.Stretch)
+        header.setResizeMode(2, QHeaderView.Stretch)
+        
+        # initialize ROS publisher topics
+        rospy.init_node("reha_interface", anonymous=True)
+        exercise_init_pub = rospy.Publisher("reha_exercise_init", ExerciseInit)
+        exercise_stop_pub = rospy.Publisher("reha_exercise_stop", Bool)
 
-	# initialize custom object loader widget
-	self.defineNewColorWidget = DefineNewColor.UIDefineNewColorWidget(self)
+	    # initialize some other necessary variables
+        self._calibrate_only = False
+        
+        # connect functions to widgets
+        self.btnInternalRotationExercise.clicked.connect(self.btnInternalRotationExerciseClicked)
+        self.btnExternalRotationExercise.clicked.connect(self.btnExternalRotationExerciseClicked)
+        self.btnAbductionMotionExercise.clicked.connect(self.btnAbductionMotionExerciseClicked)
+        self.btnFlexionMotionExercise.clicked.connect(self.btnFlexionMotionExerciseClicked)
+        self.btnBegin.clicked.connect(self.btnBeginClicked)
+        self.btnStop.clicked.connect(self.btnStopClicked)
+        self.btnDefineNewColor.clicked.connect(self.openDefineNewColorWidget)
+        self.slNbrBlocks.valueChanged.connect(self.slNbrBlocksValueChanged)
+        self.rdFixed.clicked.connect(self.rdFixedClicked)
+        self.rdFrequency.clicked.connect(self.rdFrequencyClicked)
+        self.btnAddLine.clicked.connect(self.btnAddLineClicked)
+        self.cmbFaces.currentIndexChanged.connect(self.cmbFacesCurrentIndexChanged)
+        self.actionQuit.triggered.connect(self.closeEvent)
+        self.btnDeleteLine.clicked.connect(self.btnDeleteLineClicked)
+        self.tblEmotionalFeedback.itemClicked.connect(self.tblEmotionalFeedbackItemClicked)
+        self.chkQualitative.clicked.connect(self.chkQualitativeClicked)
+        self.chkQuantitative.clicked.connect(self.chkQuantitativeClicked)
+        self.btnLoadColorFile.clicked.connect(self.btnLoadColorFileClicked)
+        self.btnLoadCalibFile.clicked.connect(self.btnLoadCalibFileClicked)
+        self.btnCalibrateNow.clicked.connect(self.btnCalibrateNowClicked)
+    
+    # **** some helper functions specific to the class ****
+    def disableAllWidgets(self):
+        # disable all other buttons while the chosen exercise is running
+        self.btnFlexionMotionExercise.setEnabled(False)
+        self.btnAbductionMotionExercise.setEnabled(False)
+        self.btnInternalRotationExercise.setEnabled(False)
+        self.btnExternalRotationExercise.setEnabled(False)
+        self.btnBegin.setEnabled(False)
+        self.btnStop.setEnabled(True)
+        self.slNbrBlocks.setEnabled(False)
+        self.spnNbrRepetitions.setEnabled(False)
+        self.spnTimeLimit.setEnabled(False)
+        self.chkQualitative.setEnabled(False)
+        self.chkQuantitative.setEnabled(False)
+        self.spnQuantEncRep.setEnabled(False)
+        self.cmbQualiEnc.setEnabled(False)
+        self.btnDeleteLine.setEnabled(False)
+        self.rdFixed.setEnabled(False)
+        self.rdFrequency.setEnabled(False)
+        self.spnFixedReps.setEnabled(False)
+        self.spnFrequencyReps.setEnabled(False)
+        self.cmbFaces.setEnabled(False)
+        self.btnAddLine.setEnabled(False)
+        self.spnWidth.setEnabled(False)
+        self.spnHeight.setEnabled(False)
+        self.cmbRobotPosition.setEnabled(False)
+        self.spnCalibDuration.setEnabled(False)
+        self.btnLoadColorFile.setEnabled(False)
+        self.btnDefineNewColor.setEnabled(False)
+        self.btnLoadCalibFile.setEnabled(False)
+        self.cmbCreateCalibFileFor.setEnabled(False)
+        self.btnCalibrateNow.setEnabled(False)
 
-	# load logo images
-	uniLuLogoScene = QGraphicsScene()
-	imagePixmap_unilu = QGraphicsPixmapItem(QPixmap(QImage("imgs/university_of_luxembourg_logo.png")), None, uniLuLogoScene)
-	self.grUniLuLogo.setScene(uniLuLogoScene)
-	self.grUniLuLogo.fitInView(uniLuLogoScene.sceneRect(), Qt.KeepAspectRatio)
-	rehaZenterLogoScene = QGraphicsScene()
-	imagePixmap_reha = QGraphicsPixmapItem(QPixmap(QImage("imgs/rehazenter_logo.jpg")), None, rehaZenterLogoScene)
-	self.grRehaZenterLogo.setScene(rehaZenterLogoScene)
-	self.grRehaZenterLogo.fitInView(rehaZenterLogoScene.sceneRect(), Qt.KeepAspectRatio)
-
-	# initialize calibration file selection dialog
-	self.dlgLoadCalibFile = QFileDialog()
-	self.dlgLoadCalibFile.setFileMode(QFileDialog.ExistingFile)
-	self.dlgLoadCalibFile.setFilter("Calibration files (*.clb)")
-	self.dlgLoadCalibFile.setAcceptMode(QFileDialog.AcceptOpen)
-
-	# initialize color file selection dialog
-	self.dlgLoadColorFile = QFileDialog()
-	self.dlgLoadColorFile.setFileMode(QFileDialog.ExistingFile)
-	self.dlgLoadColorFile.setFilter("Color files (*.clr)")
-	self.dlgLoadColorFile.setAcceptMode(QFileDialog.AcceptOpen)
-
-	# initialize calibration file save dialog
-	self.dlgSaveCalibFile = QFileDialog()
-	self.dlgSaveCalibFile.setFileMode(QFileDialog.AnyFile)
-	self.dlgSaveCalibFile.setFilter("Calibration files (*.clb)")
-	self.dlgSaveCalibFile.setAcceptMode(QFileDialog.AcceptSave)
-
-	# initialize rotation exercises warning message box
-	self.msgRotationExercises = QMessageBox()
-	self.msgRotationExercises.setIcon(QMessageBox.Warning)
-	self.msgRotationExercises.setText("Sorry, rotation exercises have not been implemented yet!")
-	self.msgRotationExercises.setInformativeText("Please choose one of the motion exercises instead until rotation exercises become available.")
-	self.msgRotationExercises.setWindowTitle("Rotation exercises warning")
-	self.msgRotationExercises.setStandardButtons(QMessageBox.Ok)
-
-	# initialize calibration fail message box
-	self.msgCalibrationInterrupted = QMessageBox()
-	self.msgCalibrationInterrupted.setIcon(QMessageBox.Warning)
-	self.msgCalibrationInterrupted.setText("Calibration was interrupted! Please try to calibrate again.")
-	self.msgCalibrationInterrupted.setWindowTitle("Calibration interrupted")
-	self.msgCalibrationInterrupted.setStandardButtons(QMessageBox.Ok)
-
-	# initialize list of faces (in string form)
-	self._faces_list = ["sad", "happy", "crying"]
-	self.cmbFaces.addItems(self._faces_list)
-
-	# disable various labels and widgets on startup
-	self.lblPerRepetitions1.setEnabled(False)
-	self.lblPerRepetitions2.setEnabled(False)
-	self.spnQuantEncRep.setEnabled(False)
-	self.cmbQualiEnc.setEnabled(False)
-	self.btnDeleteLine.setEnabled(False)
-	self.spnFixedReps.setEnabled(False)
-	self.spnFrequencyReps.setEnabled(False)
-	self.btnAddLine.setEnabled(False)
-
-	# resize table columns to match their text size
-	self.tblEmotionalFeedback.setColumnCount(3)
-	header = self.tblEmotionalFeedback.horizontalHeader()
-	header.setResizeMode(0, QHeaderView.Stretch)
-	header.setResizeMode(1, QHeaderView.Stretch)
-	header.setResizeMode(2, QHeaderView.Stretch)
-
-	# initialize ROS publisher topics
-	rospy.init_node("reha_interface", anonymous=True)
-	exercise_init_pub = rospy.Publisher("reha_exercise_init", ExerciseInit)
-	exercise_stop_pub = rospy.Publisher("reha_exercise_stop", Bool)
-
-	# connect functions to widgets
-	self.btnInternalRotationExercise.clicked.connect(self.btnInternalRotationExerciseClicked)
-	self.btnExternalRotationExercise.clicked.connect(self.btnExternalRotationExerciseClicked)
-	self.btnAbductionMotionExercise.clicked.connect(self.btnAbductionMotionExerciseClicked)
-	self.btnFlexionMotionExercise.clicked.connect(self.btnFlexionMotionExerciseClicked)
-	self.btnBegin.clicked.connect(self.btnBeginClicked)
-	self.btnStop.clicked.connect(self.btnStopClicked)
-	self.btnDefineNewColor.clicked.connect(self.openDefineNewColorWidget)
-	self.slNbrBlocks.valueChanged.connect(self.slNbrBlocksValueChanged)
-	self.rdFixed.clicked.connect(self.rdFixedClicked)
-	self.rdFrequency.clicked.connect(self.rdFrequencyClicked)
-	self.btnAddLine.clicked.connect(self.btnAddLineClicked)
-	self.cmbFaces.currentIndexChanged.connect(self.cmbFacesCurrentIndexChanged)
-	self.actionQuit.triggered.connect(self.closeEvent)
-	self.btnDeleteLine.clicked.connect(self.btnDeleteLineClicked)
-	self.tblEmotionalFeedback.itemClicked.connect(self.tblEmotionalFeedbackItemClicked)
-	self.chkQualitative.clicked.connect(self.chkQualitativeClicked)
-	self.chkQuantitative.clicked.connect(self.chkQuantitativeClicked)
-	self.btnLoadColorFile.clicked.connect(self.btnLoadColorFileClicked)
-	self.btnLoadCalibFile.clicked.connect(self.btnLoadCalibFileClicked)
-	self.btnCalibrateNow.clicked.connect(self.btnCalibrateNowClicked)
-
-
+    def enableAllWidgets(self):
+        # disable all other buttons while the chosen exercise is running
+        self.btnFlexionMotionExercise.setEnabled(True)
+        self.btnAbductionMotionExercise.setEnabled(True)
+        self.btnInternalRotationExercise.setEnabled(True)
+        self.btnExternalRotationExercise.setEnabled(True)
+        self.btnBegin.setEnabled(False)
+        self.btnStop.setEnabled(False)
+        self.slNbrBlocks.setEnabled(True)
+        self.spnNbrRepetitions.setEnabled(True)
+        self.spnTimeLimit.setEnabled(True)
+        self.chkQualitative.setEnabled(True)
+        self.chkQuantitative.setEnabled(True)
+        self.spnQuantEncRep.setEnabled(False)
+        self.cmbQualiEnc.setEnabled(False)
+        if self.tblEmotionalFeedback.rowCount() > 0:
+            self.btnDeleteLine.setEnabled(True)
+        else:
+            self.btnDeleteLine.setEnabled(False)
+        self.rdFixed.setEnabled(True)
+        self.rdFrequency.setEnabled(True)
+        self.spnFixedReps.setEnabled(False)
+        self.spnFrequencyReps.setEnabled(False)
+        self.btnAddLine.setEnabled(False)
+        self.cmbFaces.setEnabled(True)
+        self.btnAddLine.setEnabled(True)
+        self.spnWidth.setEnabled(True)
+        self.spnHeight.setEnabled(True)
+        self.cmbRobotPosition.setEnabled(True)
+        self.spnCalibDuration.setEnabled(True)
+        self.btnLoadColorFile.setEnabled(True)
+        self.btnDefineNewColor.setEnabled(True)
+        self.btnLoadCalibFile.setEnabled(True)
+        self.cmbCreateCalibFileFor.setEnabled(True)
+        if self.lnColorFile.text() != "":
+            self.btnCalibrateNow.setEnabled(True)
+        else:
+            self.btnCalibrateNow.setEnabled(False)
+        self.lblPerRepetitions1.setEnabled(False)
+        self.lblPerRepetitions2.setEnabled(False)
+    
     # *******************************************************************************************
     # *************************  connector functions for the UI buttons  ************************
     # *******************************************************************************************
     def btnFlexionMotionExerciseClicked(self):
-	# enable all other buttons except the one for exercise 1
-	self.btnBegin.setEnabled(True)
-	self.btnFlexionMotionExercise.setEnabled(False)
-	self.btnAbductionMotionExercise.setEnabled(True)
-	self.btnInternalRotationExercise.setEnabled(True)
-	self.btnExternalRotationExercise.setEnabled(True)
-	self.txtViewLogOutput.appendPlainText("Flexion motion exercise selected.")
-	
+        # enable all other buttons except the one for exercise 1
+        self.btnBegin.setEnabled(True)
+        self.btnFlexionMotionExercise.setEnabled(False)
+        self.btnAbductionMotionExercise.setEnabled(True)
+        self.btnInternalRotationExercise.setEnabled(True)
+        self.btnExternalRotationExercise.setEnabled(True)
+        self.txtViewLogOutput.appendPlainText("Flexion motion exercise selected.")
+    
     def btnAbductionMotionExerciseClicked(self):
-	# enable all other buttons except the one for exercise 2
-	self.btnBegin.setEnabled(True)
-	self.btnFlexionMotionExercise.setEnabled(True)
-	self.btnAbductionMotionExercise.setEnabled(False)
-	self.btnInternalRotationExercise.setEnabled(True)
-	self.btnExternalRotationExercise.setEnabled(True)
-	self.txtViewLogOutput.appendPlainText("Abduction motion exercise selected.")
-
+        # enable all other buttons except the one for exercise 2
+        self.btnBegin.setEnabled(True)
+        self.btnFlexionMotionExercise.setEnabled(True)
+        self.btnAbductionMotionExercise.setEnabled(False)
+        self.btnInternalRotationExercise.setEnabled(True)
+        self.btnExternalRotationExercise.setEnabled(True)
+        self.txtViewLogOutput.appendPlainText("Abduction motion exercise selected.")
+    
     def btnInternalRotationExerciseClicked(self):
-	# enable all other buttons except the one for exercise 3
-	self.btnBegin.setEnabled(True)
-	self.btnFlexionMotionExercise.setEnabled(True)
-	self.btnAbductionMotionExercise.setEnabled(True)
-	self.btnInternalRotationExercise.setEnabled(False)
-	self.btnExternalRotationExercise.setEnabled(True)
-	self.txtViewLogOutput.appendPlainText("Internal rotation exercise selected.")
-
+        # enable all other buttons except the one for exercise 3
+        self.btnBegin.setEnabled(True)
+        self.btnFlexionMotionExercise.setEnabled(True)
+        self.btnAbductionMotionExercise.setEnabled(True)
+        self.btnInternalRotationExercise.setEnabled(False)
+        self.btnExternalRotationExercise.setEnabled(True)
+        self.txtViewLogOutput.appendPlainText("Internal rotation exercise selected.")
+    
     def btnExternalRotationExerciseClicked(self):
-	# enable all other buttons except the one for exercise 4
-	self.btnBegin.setEnabled(True)
-	self.btnFlexionMotionExercise.setEnabled(True)
-	self.btnAbductionMotionExercise.setEnabled(True)
-	self.btnInternalRotationExercise.setEnabled(True)
-	self.btnExternalRotationExercise.setEnabled(False)
-	self.txtViewLogOutput.appendPlainText("External rotation exercise selected.")
-
+        # enable all other buttons except the one for exercise 4
+        self.btnBegin.setEnabled(True)
+        self.btnFlexionMotionExercise.setEnabled(True)
+        self.btnAbductionMotionExercise.setEnabled(True)
+        self.btnInternalRotationExercise.setEnabled(True)
+        self.btnExternalRotationExercise.setEnabled(False)
+        self.txtViewLogOutput.appendPlainText("External rotation exercise selected.")
+    
     def btnBeginClicked(self):
-	# rotation exercises have not been implemented yet...
-	if not self.btnInternalRotationExercise.isEnabled() or not self.btnExternalRotationExercise.isEnabled():
-		self.msgRotationExercises.exec_()
-		return
+        # rotation exercises have not been implemented yet...
+        if not self.btnInternalRotationExercise.isEnabled() or not self.btnExternalRotationExercise.isEnabled():
+            self.msgRotationExercises.exec_()
+            return
+	    self._calibrate_only = False
+        
+        # disable all other buttons while the chosen exercise is running
+        self.btnFlexionMotionExercise.setEnabled(False)
+        self.btnAbductionMotionExercise.setEnabled(False)
+        self.btnInternalRotationExercise.setEnabled(False)
+        self.btnExternalRotationExercise.setEnabled(False)
+        self.btnBegin.setEnabled(False)
+        self.btnStop.setEnabled(True)
+        
+        # spawn exercise subprocess
+        self.txtViewLogOutput.appendPlainText("******************** BEGIN EXERCISE ********************")
+        msg = ExerciseInit()
+        
+        # build exercise init message
+        msg.camera_width = self.spnWidth.value()
+        msg.camera_height = self.spnHeight.value()
+        msg.blocks = self.slNbrBlocks.value()
+        msg.repetitions = self.spnTimeLimit.value()
+        msg.calibration_duration = self.spnCalibDuration.value()
+        if self.chkQuantitative.isChecked():
+            msg.quantitative_frequency = self.spnQuantEncRep.value()
+        else:
+            msg.quantitative_frequency = 0
+        if self.chkQualitative.isChecked():
+            if self.cmbQualiEnc.text() == "high":
+                msg.qualitative_frequency = 3
+            elif self.cmbQualiEnc.text() == "medium":
+                msg.qualitative_frequency = 2
+            else:
+                msg.qualitative_frequency = 1
+        else:
+            msg.qualitative_frequency = 0
+            msg.qualitative_frequency = self.spnQualiEnc.value()
+        msg.robot_position = self.cmbRobotPosition.currentIndex()
+        msg.rotation_type = 0
+        msg.emotional_feedback_list = []
+        for i in range(0,self.tblEmotionalFeedback.columnCount()):
+            emotional_feedback = EmotionalFeedback()
+            emotional_feedback.is_fixed_feedback = (str(self.tblEmotionalFeedback.item(i, 0).text()) == "fixed")
+            emotional_feedback.repetitions = int(self.tblEmotionalFeedback.item(i, 1).text())
+            emotional_feedback.face_to_show = str(self.tblEmotionalFeedback.item(i, 0).text())
+            msg.emotional_feedback_list.append(emotional_feedback)
+        msg.rgb_colors = load_color_file(str(self.lnColorFile.text()))
+        self.exercise_init_pub.publish(msg)
+        calib_data = load_calib_file(self.lnCalibFile.text())
+        msg.calibration_points_left_arm = calib_data[0]
+        msg.calibration_points_right_arm = calib_data[1]
+        self._exercise_init_pub.publish(msg)
+        self.txtViewLogOutput.appendPlainText("Current exercise configuration:\n" + str(msg))
 
-	# disable all other buttons while the chosen exercise is running
-	self.btnFlexionMotionExercise.setEnabled(False)
-	self.btnAbductionMotionExercise.setEnabled(False)
-	self.btnInternalRotationExercise.setEnabled(False)
-	self.btnExternalRotationExercise.setEnabled(False)
-	self.btnBegin.setEnabled(False)
-	self.btnStop.setEnabled(True)
-
-	# spawn exercise subprocess
-	self.txtViewLogOutput.appendPlainText("******************** BEGIN EXERCISE ********************")
-	msg = ExerciseInit()
-
-	# build exercise init message
-	msg.camera_width = self.spnWidth.value()
-	msg.camera_height = self.spnHeight.value()
-	msg.blocks = self.slNbrBlocks.value()
-	msg.repetitions = self.spnTimeLimit.value()
-	msg.calibration_duration = self.spnCalibDuration.value()
-	if self.chkQuantitative.isChecked():
-		msg.quantitative_frequency = self.spnQuantEncRep.value()
-	else:
-		msg.quantitative_frequency = 0
-	if self.chkQualitative.isChecked():
-		if self.cmbQualiEnc.text() == "high":
-			msg.qualitative_frequency = 3
-		elif self.cmbQualiEnc.text() == "medium":
-			msg.qualitative_frequency = 2
-		else:
-			msg.qualitative_frequency = 1
-	else:
-		msg.qualitative_frequency = 0
-	msg.qualitative_frequency = self.spnQualiEnc.value()
-	msg.robot_position = self.cmbRobotPosition.currentIndex()
-	msg.rotation_type = 0
-	msg.emotional_feedback_list = []
-	for(i=0, i<self.tblEmotionalFeedback.columnCount(), i++)
-		emotional_feedback = EmotionalFeedback()
-		emotional_feedback.is_fixed_feedback = (str(self.tblEmotionalFeedback.item(i, 0).text()) == "fixed")
-		emotional_feedback.repetitions = int(self.tblEmotionalFeedback.item(i, 1).text()
-		emotional_feedback.face_to_show = str(self.tblEmotionalFeedback.item(i, 0).text())
-		msg.emotional_feedback_list.append(emotional_feedback)
-	msg.rgb_colors = load_color_file(str(self.lnColorFile.text()))
-	self.exercise_init_pub.publish(msg)
-	calib_data = load_calib_file(self.lnCalibFile.text())
-	msg.calibration_points_left_arm = calib_data[0]
-	msg.calibration_points_right_arm = calib_data[1]
-	self._exercise_init_pub.publish(msg)
-	self.txtViewLogOutput.appendPlainText("Current exercise configuration:\n" + str(msg))
-	
     def btnStopClicked(self):
-	# stop exercise subprocess and kill ROS console worker thread
-	self.exercise_stop_pub.publish(True)
+        # stop exercise on robot
+        self.exercise_stop_pub.publish(self._calibrate_only)
 
-	# enable all other buttons again
-	self.btnFlexionMotionExercise.setEnabled(True)
-	self.btnAbductionMotionExercise.setEnabled(True)
-	self.btnInternalRotationExercise.setEnabled(True)
-	self.btnExternalRotationExercise.setEnabled(True)
-	self.btnBegin.setEnabled(True)
-	self.btnStop.setEnabled(False)
-	self.txtViewLogOutput.appendPlainText("********************* END EXERCISE *********************")
+        # enable all other buttons again
+        self.btnFlexionMotionExercise.setEnabled(True)
+        self.btnAbductionMotionExercise.setEnabled(True)
+        self.btnInternalRotationExercise.setEnabled(True)
+        self.btnExternalRotationExercise.setEnabled(True)
+        self.btnBegin.setEnabled(True)
+        self.btnStop.setEnabled(False)
+        self.txtViewLogOutput.appendPlainText("********************* END EXERCISE *********************")
 
     def chkQuantitativeClicked(self):
-	self.spnQuantEncRep.setEnabled(self.chkQuantitative.isChecked())
+        self.spnQuantEncRep.setEnabled(self.chkQuantitative.isChecked())
 
     def chkQualitativeClicked(self):
-	self.cmbQualiEnc.setEnabled(self.chkQualitative.isChecked())
-
+        self.cmbQualiEnc.setEnabled(self.chkQualitative.isChecked())
+         
     def btnLoadColorFileClicked(self):
-	if self.dlgLoadColorFile.exec_():
-		filename = self.dlgLoadColorFile.selectedFiles()[0]
-		self.lnColorFile.setText(filename)
-
+        if self.dlgLoadColorFile.exec_():
+            filename = self.dlgLoadColorFile.selectedFiles()[0]
+            self.lnColorFile.setText(filename)
+         
     def btnLoadCalibFileClicked(self):
-	if self.dlgLoadCalibFile.exec_():
-		filename = self.dlgLoadCalibFile.selectedFiles()[0]
-		self.lnCalibFile.setText(filename)
-
+        if self.dlgLoadCalibFile.exec_():
+            filename = self.dlgLoadCalibFile.selectedFiles()[0]
+            self.lnCalibFile.setText(filename)
+         
     def rdFixedClicked(self):
-	self.spnFrequencyReps.setEnabled(False)
-	self.spnFixedReps.setEnabled(True)
-	if self.cmbFaces.currentIndex() > -1:
-		self.btnAddLine.setEnabled(True)
-	else:
-		self.btnAddLine.setEnabled(False)	
-
+        self.spnFrequencyReps.setEnabled(False)
+        self.spnFixedReps.setEnabled(True)
+        if self.cmbFaces.currentIndex() > -1:
+            self.btnAddLine.setEnabled(True)
+        else:
+            self.btnAddLine.setEnabled(False)
+     
     def rdFrequencyClicked(self):
-	self.spnFrequencyReps.setEnabled(True)
-	self.spnFixedReps.setEnabled(False)
-	if self.cmbFaces.currentIndex() > -1:
-		self.btnAddLine.setEnabled(True)
-	else:
-		self.btnAddLine.setEnabled(False)
-
+        self.spnFrequencyReps.setEnabled(True)
+        self.spnFixedReps.setEnabled(False)
+        if self.cmbFaces.currentIndex() > -1:
+            self.btnAddLine.setEnabled(True)
+        else:
+            self.btnAddLine.setEnabled(False)
+     
     def btnDeleteLineClicked(self):
-	self.tblEmotionalFeedback.removeRow(self.tblEmotionalFeedback.currentRow())
-	self.btnDeleteLine.setEnabled(False)
-
+        self.tblEmotionalFeedback.removeRow(self.tblEmotionalFeedback.currentRow())
+        self.btnDeleteLine.setEnabled(False)
+     
     def btnCalibrateNowClicked(self):
-	if self.dlgSaveCalibFile.exec_():
-		# create calibration service request message
-		request = CalibrationRequest()
-		if str(self.cmbCreateCalibFileFor.currentText()) == "flexion exercise" or str(self.cmbCreateCalibFileFor.currentText()) == "abduction exercise":
-			request.motion_type = 1
-			request.rotation_type = 0
-		else:
-			self.msgRotationExercises.exec_()
-			return
-		try:
-			request.rgb_color_list = load_color_file(str(self.lnColorFile.text()))
-		except IOError:
-			# TODO: maybe show error in dialog box instead?
-			print "Color file could not be read!"
-			return
-		except ValueError:
-			# TODO: maybe show error in dialog box instead?
-			print "Color file has invalid contents!"
-			return
-		request.robot_position = self.cmbRobotPosition.currentIndex()
-		request.calibration_duration = self.spnCalibDuration.value()
-		request.camera_width = self.spnWidth.value()
-		request.camera_height = self.spnHeight.value()
+        if self.dlgSaveCalibFile.exec_():
+        # create calibration service request message
+            self._calibration_only = True
+            request = CalibrationRequest()
+            if str(self.cmbCreateCalibFileFor.currentText()) == "flexion exercise" or str(self.cmbCreateCalibFileFor.currentText()) == "abduction exercise":
+                request.motion_type = 1
+                request.rotation_type = 0
+            else:
+                self.msgRotationExercises.exec_()
+                return
+            try:
+                request.rgb_color_list = load_color_file(str(self.lnColorFile.text()))
+            except IOError:
+                # TODO: maybe show error in dialog box instead?
+                print "Color file could not be read!"
+                return
+            except ValueError:
+                # TODO: maybe show error in dialog box instead?
+                print "Color file has invalid contents!"
+                return
+            request.robot_position = self.cmbRobotPosition.currentIndex()
+            request.calibration_duration = self.spnCalibDuration.value()
+            request.camera_width = self.spnWidth.value()
+            request.camera_height = self.spnHeight.value()
 
-		# publish request to service and wait for response
-		rospy.wait_for_service('calibrate')
-		try:
-			calibrate = rospy.ServiceProxy('calibrate', Calibration)
-			response = calibrate(request)
-		except rospy.ServiceException, e:
-			# TODO: maybe show error in dialog box instead?
-			print "Service call failed: %s"%e
-			return
-
-		# write calibration points to file
-		if response.status == 0:
-			filename = self.dlgSaveCalibFile.selectedFiles()[0]
-			if not filename.endsWith(".clb"):
-				filename += ".clb"
-			calib_fileptr = open(filename, "w")
-			calib_fileptr.write("motion_type=" + str(request.motion_type) + "\n")
-			calib_fileptr.write("rotation_type=" + str(request.rotation_type) + "\n")
-			calib_fileptr.write("robot_position=" + str(request.robot_position) + "\n")
-			calib_fileptr.write("calibration_points_left_arm=" + str(response.calibration_points_left_arm.data)+ "\n")
-			calib_fileptr.write("calibration_points_right_arm=" + str(response.calibration_points_right_arm.data)+ "\n")
-			calib_fileptr.close()
-		else:
-			self.msgCalibrationInterrupted.exec_()	
-	
+            # publish request to service and wait for response
+            rospy.wait_for_service('calibrate')
+            self.disableAllWidgets()
+            self.tabWidget.setCurrentIndex(1)
+            try:
+                calibrate = rospy.ServiceProxy('calibrate', Calibration)
+                response = calibrate(request)
+            except rospy.ServiceException, e:
+                # TODO: maybe show error in dialog box instead?
+                print "Service call failed: %s"%e
+                return
+             
+            # write calibration points to file
+            if response.status == 0:
+                filename = self.dlgSaveCalibFile.selectedFiles()[0]
+                if not filename.endsWith(".clb"):
+                    filename += ".clb"
+                    calib_fileptr = open(filename, "w")
+                    calib_fileptr.write("motion_type=" + str(request.motion_type) + "\n")
+                    calib_fileptr.write("rotation_type=" + str(request.rotation_type) + "\n")
+                    calib_fileptr.write("robot_position=" + str(request.robot_position) + "\n")
+                    calib_fileptr.write("calibration_points_left_arm=" + str(response.calibration_points_left_arm.data)+ "\n")
+                    calib_fileptr.write("calibration_points_right_arm=" + str(response.calibration_points_right_arm.data)+ "\n")
+                    calib_fileptr.close()
+            else:
+                self.enableAllWidgets()
+                self.msgCalibrationInterrupted.exec_()
 
     def tblEmotionalFeedbackItemClicked(self):
-	self.btnDeleteLine.setEnabled(True)
+        self.btnDeleteLine.setEnabled(True)
 
     def btnAddLineClicked(self):
-	self.tblEmotionalFeedback.insertRow(self.tblEmotionalFeedback.rowCount())
-	if self.rdFixed.isChecked():
-		typeText = "fixed"
-		repetitionsText = str(self.spnFixedReps.value())
-	elif self.rdFrequency.isChecked():
-		typeText = "frequency"
-		repetitionsText = str(self.spnFrequencyReps.value())
-	else:
-		raise Exception("error when selecting facial feedback, this is not supposed to happen...")
-	faceText = self.cmbFaces.currentText()
-	self.tblEmotionalFeedback.setItem(self.tblEmotionalFeedback.rowCount()-1, 0, QTableWidgetItem(typeText))
-	self.tblEmotionalFeedback.setItem(self.tblEmotionalFeedback.rowCount()-1, 1, QTableWidgetItem(repetitionsText))
-	self.tblEmotionalFeedback.setItem(self.tblEmotionalFeedback.rowCount()-1, 2, QTableWidgetItem(faceText))
-	self.spnFixedReps.setEnabled(False)
-	self.spnFrequencyReps.setEnabled(False)
-	self.rdFixed.setChecked(False)
-	self.rdFrequency.setChecked(False)
-	self.cmbFaces.setCurrentIndex(-1)
-	self.btnAddLine.setEnabled(False)
+        self.tblEmotionalFeedback.insertRow(self.tblEmotionalFeedback.rowCount())
+        if self.rdFixed.isChecked():
+            typeText = "fixed"
+            repetitionsText = str(self.spnFixedReps.value())
+        elif self.rdFrequency.isChecked():
+            typeText = "frequency"
+            repetitionsText = str(self.spnFrequencyReps.value())
+        else:
+            raise Exception("error when selecting facial feedback, this is not supposed to happen...")
+        faceText = self.cmbFaces.currentText()
+        self.tblEmotionalFeedback.setItem(self.tblEmotionalFeedback.rowCount()-1, 0, QTableWidgetItem(typeText))
+        self.tblEmotionalFeedback.setItem(self.tblEmotionalFeedback.rowCount()-1, 1, QTableWidgetItem(repetitionsText))
+        self.tblEmotionalFeedback.setItem(self.tblEmotionalFeedback.rowCount()-1, 2, QTableWidgetItem(faceText))
+        self.spnFixedReps.setEnabled(False)
+        self.spnFrequencyReps.setEnabled(False)
+        self.rdFixed.setChecked(False)
+        self.rdFrequency.setChecked(False)
+        self.cmbFaces.setCurrentIndex(-1)
+        self.btnAddLine.setEnabled(False)
 
     def appendToTextView(self, line):
-	self.txtViewLogOutput.appendPlainText(line)
-
+        self.txtViewLogOutput.appendPlainText(line)
+         
     def cmbFacesCurrentIndexChanged(self):
-	if self.rdFixed.isChecked() or self.rdFrequency.isChecked():
-		self.btnAddLine.setEnabled(True)
-
+        if self.rdFixed.isChecked() or self.rdFrequency.isChecked():
+            self.btnAddLine.setEnabled(True)
+         
     def openDefineNewColorWidget(self):
-	self.defineNewColorWidget.show()
-
+        self.defineNewColorWidget.show()
+         
     def updateColorFileName(self, color_filename):
-	self.lnColorFile.setText(color_filename)
-
+        self.lnColorFile.setText(color_filename)
+         
     def slNbrBlocksValueChanged(self):
-	self.lblNbrBlocksValue.setText(str(self.slNbrBlocks.value()))
-
+        self.lblNbrBlocksValue.setText(str(self.slNbrBlocks.value()))
+         
     def closeEvent(self, event):
         reply = QtGui.QMessageBox.question(self, 'Message', "Are you sure that you want to quit?", QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
         if reply == QtGui.QMessageBox.Yes:
-		if hasattr(self, "exercise_process") and self.exercise_process != None:
-			#self.exercise_process.communicate(input="q")
-			self.exercise_process.terminate() 
-			self.exercise_process.wait()
-		event.accept()
+            if hasattr(self, "exercise_process") and self.exercise_process != None:
+                #self.exercise_process.communicate(input="q")
+                self.exercise_process.terminate()
+                self.exercise_process.wait()
+            event.accept()
         else:
-		event.ignore()
-    # *******************************************************************************************
-
+            event.ignore()
+# *******************************************************************************************
+         
 if __name__ == "__main__":
-    import sys
+    from xmlrpclib import ServerProxy
+    try:
+        m = ServerProxy(os.environ['ROS_MASTER_URI'])
+        code, msg, val = m.getSystemState("reha_interface")
+    except:
+        print("Unable to communicate with ROS master! Aborting.")
+        sys.exit()
     app = QtGui.QApplication(sys.argv)
-    myapp = QTRehaZenterGUI() 
+    myapp = QTRehaZenterGUI()
     #app.processEvents()
     myapp.show()
     sys.exit(app.exec_())
-

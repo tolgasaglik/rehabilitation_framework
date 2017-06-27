@@ -3,11 +3,11 @@ uint8 robot_position
 uint8 motion_type
 uint8 rotation_type
 uint8 calibration_duration
-RGBColorList rgb_color_list
+RGBColor[] rgb_color_list
 uint16 camera_width
 uint16 camera_height
 ---
 # response message
 uint8 status
-CalibrationPointList calibration_points_left_arm
-CalibrationPointList calibration_points_right_arm
+CalibrationPoint[] calibration_points_left_arm
+CalibrationPoint[] calibration_points_right_arm
