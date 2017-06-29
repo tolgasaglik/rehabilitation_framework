@@ -36,25 +36,45 @@ class RosServer(object):
             rosparam.set_param_raw(self._NODE_NAME + "/camera_width", data.camera_width)
             rosparam.set_param_raw(self._NODE_NAME + "/camera_height", data.camera_height)
             rosparam.set_param_raw(self._NODE_NAME + "/robot_position", data.robot_position)
-            rosparam.set_param_raw(self._NODE_NAME + "/rgb_colors", data.rgb_colors.data)
+
+            # create array of tuples from color data of ROS message
+            rgb_colors = []
+            eval_str = "["
+            for color in data.rgb_colors:
+                eval_str += "(" + color.red + "," + color.green + "," + color.blue + "),"
+            rgb_colors = ast.literal_eval(eval_str[:-1] + "]")
+            if len(rgb_colors) == 0:
+                rospy.loginfo("Received exercise request with empty colors list! Ignoring request.")
+                return
+            rosparam.set_param_raw(self._NODE_NAME + "/rgb_colors", rgb_colors)
             rosparam.set_param_raw(self._NODE_NAME + "/repetitions_limit", data.repetitions)
             rosparam.set_param_raw(self._NODE_NAME + "/time_limit", data.time_limit)
+
             # create array of calibration points from ROS message
             calibration_points_left_arm = []
             calibration_points_right_arm = []
             eval_str = "["
             for point in data.calibration_points_left_arm:
                 eval_str += "(" + point.x + "," + point.y + "),"
-            calibration_points_left_arm += ast.literal_eval(eval_str[:-1] + "]")
+            calibration_points_left_arm = ast.literal_eval(eval_str[:-1] + "]")
             eval_str = "["
             for point in data.calibration_points_right_arm:
                 eval_str += "(" + point.x + "," + point.y + "),"
-            calibration_points_right_arm += ast.literal_eval(eval_str[:-1] + "]")
+            calibration_points_right_arm = ast.literal_eval(eval_str[:-1] + "]")
+            if len(calibration_points_left_arm) != len(calibration_points_right_arm) or len(calibration_points_left_arm == 0) and len(calibration_points_right_arm == 0):
+                rospy.loginfo("Received exercise request with invalid calibration points! Ignoring request.")
+                return
             rosparam.set_param_raw(self._NODE_NAME + "/calibration_points_left_arm", calibration_points_left_arm)
             rosparam.set_param_raw(self._NODE_NAME + "/calibration_points_right_arm", calibration_points_right_arm)
-            rosparam.set_param_raw(self._NODE_NAME + "/time_limit", data.time_limit)
             rosparam.set_param_raw(self._NODE_NAME + "/quantitative_frequency", data.quantitative_frequency)
             rosparam.set_param_raw(self._NODE_NAME + "/qualitative_frequency", data.qualitative_frequency)
+
+            # create array of emotional feedback from ROS message
+            emotional_feedback = []
+            eval_str = "["
+            for ef in data.emotional_feedback:
+                eval_str += "(" + ef.is_fixed_feedback + "," + ef.repetitions + ", " + str(ef.face_to_show) + "),"
+            emotional_feedback = ast.literal_eval(eval_str[:-1] + "]")
             rosparam.set_param_raw(self._NODE_NAME + "/emotional_feedback_list", data.emotional_feedback_list)
 
             # launch exercise instance as process
@@ -95,7 +115,7 @@ class RosServer(object):
             self._exercise_instance = Popen(launch_params)
             self._exercise_instance.wait()
 
-            # TODO: idea for stopping calibration process: send signal to process and check if calibration file exists
+            # retrieve calibration file written by exercise subprocess and send data to GUI client
             calibration_reply = CalibrationReply()
             if os.path.exists("/tmp/temp_calib_file.clb"):
                 # retrieve created file and send contents over to GUI

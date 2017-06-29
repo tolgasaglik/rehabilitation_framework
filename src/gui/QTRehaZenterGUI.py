@@ -44,6 +44,7 @@ def load_calib_file(filename):
     calibration_points_right_arm = []
     # TODO: add checks to see if the calibration data corresponds to current exercise settings
     for line in calib_fileptr.readlines():
+        cb_points_from_file = []
         if line.startswith("calibration_points_left_arm="):
             cb_points_from_file = ast.literal_eval(line[28:])
             if len(cb_points_from_file) == 0:
@@ -52,14 +53,15 @@ def load_calib_file(filename):
             cb_points_from_file = ast.literal_eval(line[29:])
             if len(cb_points_from_file) == 0:
                 raise ValueError("Invalid file contents!")
-    for cb_point in cb_points_from_file:
-        point_to_add = CalibrationPoint()
-        point_to_add.x = cb_point[0]
-        point_to_add.y = cb_point[1]
-        if line.startswith("left_arm="):
-            calibration_points_left_arm.append(point_to_add)
-        else:
-            calibration_points_right_arm.append(point_to_add)
+        if len(cb_points_from_file) > 0:
+            for cb_point in cb_points_from_file:
+                point_to_add = CalibrationPoint()
+                point_to_add.x = cb_point[0]
+                point_to_add.y = cb_point[1]
+                if line.startswith("calibration_points_left_arm="):
+                    calibration_points_left_arm.append(point_to_add)
+                else:
+                    calibration_points_right_arm.append(point_to_add)
     calib_fileptr.close()
     return (calibration_points_left_arm, calibration_points_right_arm)
 
@@ -290,8 +292,13 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.txtViewLogOutput.appendPlainText("External rotation exercise selected.")
     
     def btnBeginClicked(self):
-        # rotation exercises have not been implemented yet...
-        if not self.btnInternalRotationExercise.isEnabled() or not self.btnExternalRotationExercise.isEnabled():
+        # check various conditions before proceeding
+        if self.btnAbductionMotionExercise.isEnabled() and self.btnFlexionMotionExercise.isEnabled() and self.btnInternalRotationExercise.isEnabled() and self.btnExternalRotationExercise.isEnabled():
+            self.msgErrorWarning.setText("Please select an exercise type using one of the buttons above before proceeding.")
+            self.msgErrorWarning.setWindowTitle("No exercise selected")
+            self.msgErrorWarning.exec_()
+            return
+        elif not self.btnInternalRotationExercise.isEnabled() or not self.btnExternalRotationExercise.isEnabled():
             self.msgRotationExercises.exec_()
             return
         elif self.lnColorFile.text() == "":
@@ -305,16 +312,21 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             self.msgErrorWarning.exec_()
             return
         self._calibrate_only = False
-        
-        # spawn exercise subprocess
         self.txtViewLogOutput.appendPlainText("******************** BEGIN EXERCISE ********************")
         msg = ExerciseInit()
+        if not self.btnFlexionMotionExercise.isEnabled():
+            msg.motion_type = 1
+            msg.rotation_type = 0
+        elif not self.btnAbductionMotionExercise.isEnabled():
+            msg.motion_type = 2
+            msg.rotation_type = 0
         
         # build exercise init message
         msg.camera_width = self.spnWidth.value()
         msg.camera_height = self.spnHeight.value()
         msg.blocks = self.slNbrBlocks.value()
-        msg.repetitions = self.spnTimeLimit.value()
+        msg.time_limit = self.spnTimeLimit.value()
+        msg.repetitions = self.spnNbrRepetitions.value()
         msg.calibration_duration = self.spnCalibDuration.value()
         if self.chkQuantitative.isChecked():
             msg.quantitative_frequency = self.spnQuantEncRep.value()
