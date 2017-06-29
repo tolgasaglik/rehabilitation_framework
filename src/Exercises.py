@@ -161,7 +161,7 @@ class VideoReader(Thread):
         #self.set_kill_thread()
 
         # Minimum required radius of enclosing circle of contour
-        MIN_RADIUS = 10
+        MIN_RADIUS = 12
 
         # read frames from the capture device until interruption
         while not self._kill_thread:
@@ -225,7 +225,7 @@ class EncouragerUnit(object):
 
     @property
     def repetitions(self):
-        return self._repetitions
+        return self._repetitions_counter
 
     @property
     def repetitions_limit(self):
@@ -251,6 +251,7 @@ class EncouragerUnit(object):
         self._face_pub = rospy.Publisher('/qt_face/setEmotion', String, queue_size=1)
         self.load_sentences()
         self._repetitions_limit = repetitions_limit
+	self._repetitions_counter = 0
         self._emotional_feedbacks = emotional_feedbacks
         self._quantitative_frequency = quantitative_frequency
         self._qualitative_frequency = qualitative_frequency
@@ -298,23 +299,23 @@ class EncouragerUnit(object):
             self._ros_nodes_ready = False
 
     def inc_repetitions_counter(self):
-        self._repetitions += 1
-        print "Current number of repetitions done: " +str(self._repetitions)
+        self._repetitions_counter += 1
+        print "Current number of repetitions done: " +str(self._repetitions_counter)
 
         # process emotional feedbacks (= show an emotion on the QT robot face)
         for efb in self._emotional_feedbacks:
             # is feedback fixed? (yes/no)
-            if efb[0] == True and self._repetitions == efb[1]:
+            if efb[0] == True and self._repetitions_counter == efb[1]:
                 self._pub_face.publish(efb[2])
-            elif efb[0] == False and self._repetitions % efb[1] == 0 and self._repetitions > 0:
-                self._pub_face.publish(efb[2])
+            elif efb[0] == False and self._repetitions_counter % efb[1] == 0 and self._repetitions_counter > 0:
+                self._face_pub.publish(efb[2])
 
         # process quantitative feedback (= tell patient how many repetitions he has done so far)
-        if self._quantitative_frequency > 0 and self._repetitions in range(0,self._repetitions_limit-1) and self._repetitions % self._quantitative_frequency == 0:
-            self._pub.publish(str(self.repetitions))
+        if self._quantitative_frequency > 0 and self._repetitions_counter in range(0,self._repetitions_limit-1) and self._repetitions_counter % self._quantitative_frequency == 0:
+            self._voice_pub.publish(str(self._repetitions_counter))
 
         # process qualitative feedback (= tell patient some randomly chosen motivational sentence)
-        if self._qualitative_frequency > 0 and self._repetitions in range(0,self._repetitions_limit-1) and self._repetitions % self._qualitative_frequency == 0:
+        if self._qualitative_frequency > 0 and self._repetitions_counter in range(0,self._repetitions_limit-1) and self._repetitions_counter % self._qualitative_frequency == 0:
             self._pub.publish(self._sentences[random.randint(0,len(self._sentences))])
 
     def say(self, sentence):
@@ -504,7 +505,7 @@ class Exercise:
         # check if capture device has been initialized and calibrated
         if not self._video_reader.is_alive():
             raise Exception("Capture device not initialized!")
-        elif len(self._calibration_points) == 0:
+        elif len(self._calibration_points_left_arm) == 0:
             raise Exception("Device was not calibrated!")
 
         print "Camera dimensions: " +  str(cv2.CAP_PROP_FRAME_WIDTH) + " x " + str(cv2.CAP_PROP_FRAME_HEIGHT)
@@ -514,12 +515,13 @@ class Exercise:
         # Main loop
         index=0
         current_block=1
+	print self._number_of_blocks
         self._encourager.say("You may begin your exercise now!")
         #timer = None
         if self.time_limit > 0:
             timer = Timer(self.time_limit)
             timer.start()
-        while self.time_limit > 0 and timer.is_alive():
+        while current_block <= self._number_of_blocks or self.time_limit > 0 and timer.is_alive():
             # check if hand movement thresholds have been reached and count repetitions accordingly
             if self._video_reader.center != None :
                 if (self._limb == Limb.LEFT_ARM and abs(self._video_reader.center[0]-(self._calibration_points_left_arm[index])[0]) < self._tolerance_x and abs(self._video_reader.center[1]-(self._calibration_points_left_arm[index])[1]) < self._tolerance_y) or (self._limb == Limb.RIGHT_ARM and abs(self._video_reader.center[0]-(self._calibration_points_right_arm[index])[0]) < self._tolerance_x and abs(self._video_reader.center[1]-(self._calibration_points_right_arm[index])[1]) < self._tolerance_y):
@@ -528,8 +530,7 @@ class Exercise:
                     if index == len(self._calibration_points_left_arm):
                         index = 0
                         self._encourager.inc_repetitions_counter()
-                        if self_encourager.repetitions == self._encourager.repetitions_limit:
-                            current_block += 1
+                        if self._encourager.repetitions == self._encourager.repetitions_limit:
                             self._encourager.say("Block " + str(current_block) + " finished!")
                             if current_block < self._number_of_blocks:
                                 self._encourager.say("Take a 20 seconds break.")
@@ -545,6 +546,7 @@ class Exercise:
                                 self._encourager.say(enc_sentence)
                             else:
                                 break
+                            current_block += 1
                             
             # display images and quit loop if "q"-key was pressed
             cv2.imshow("Original image", self._video_reader.img_original)
@@ -770,7 +772,7 @@ if __name__ == '__main__':
     else:
         ros_motion_type = rosparam.get_param("/reha_exercise/motion_type")
         ros_rotation_type = rosparam.get_param("/reha_exercise/rotation_type")
-        if not args.calibrate_only and not (rospy.has_param("/reha_exercise/quantitative_frequency") and rospy.has_param("/reha_exercise/qualitative_frequency") and rospy.has_param("/reha_exercise/calibration_points_left_arm") and rospy.has_param("/reha_exercise/calibration_points_left_arm") and rospy.has_param("/reha_exercise/emotional_feedbacks")):
+        if not args.calibrate_only and not (rospy.has_param("/reha_exercise/quantitative_frequency") and rospy.has_param("/reha_exercise/qualitative_frequency") and rospy.has_param("/reha_exercise/calibration_points_left_arm") and rospy.has_param("/reha_exercise/calibration_points_left_arm") and rospy.has_param("/reha_exercise/emotional_feedback_list")):
             print("ERROR: not all required parameters are set on the parameter server for the exercise! Aborting.")
             sys.exit(1)
         elif not (ros_motion_type == 0 and ros_rotation_type > 0 or ros_motion_type > 0 and ros_rotation_type == 0):

@@ -41,7 +41,7 @@ class RosServer(object):
             rgb_colors = []
             eval_str = "["
             for color in data.rgb_colors:
-                eval_str += "(" + color.red + "," + color.green + "," + color.blue + "),"
+                eval_str += "(" + str(color.red) + "," + str(color.green) + "," + str(color.blue) + "),"
             rgb_colors = ast.literal_eval(eval_str[:-1] + "]")
             if len(rgb_colors) == 0:
                 rospy.loginfo("Received exercise request with empty colors list! Ignoring request.")
@@ -55,13 +55,13 @@ class RosServer(object):
             calibration_points_right_arm = []
             eval_str = "["
             for point in data.calibration_points_left_arm:
-                eval_str += "(" + point.x + "," + point.y + "),"
+                eval_str += "(" + str(point.x) + "," + str(point.y) + "),"
             calibration_points_left_arm = ast.literal_eval(eval_str[:-1] + "]")
             eval_str = "["
             for point in data.calibration_points_right_arm:
-                eval_str += "(" + point.x + "," + point.y + "),"
+                eval_str += "(" + str(point.x) + "," + str(point.y) + "),"
             calibration_points_right_arm = ast.literal_eval(eval_str[:-1] + "]")
-            if len(calibration_points_left_arm) != len(calibration_points_right_arm) or len(calibration_points_left_arm == 0) and len(calibration_points_right_arm == 0):
+            if len(calibration_points_left_arm) != len(calibration_points_right_arm) or len(calibration_points_left_arm) == 0 and len(calibration_points_right_arm) == 0:
                 rospy.loginfo("Received exercise request with invalid calibration points! Ignoring request.")
                 return
             rosparam.set_param_raw(self._NODE_NAME + "/calibration_points_left_arm", calibration_points_left_arm)
@@ -70,11 +70,16 @@ class RosServer(object):
             rosparam.set_param_raw(self._NODE_NAME + "/qualitative_frequency", data.qualitative_frequency)
 
             # create array of emotional feedback from ROS message
-            emotional_feedback = []
+            emotional_feedback_list = []
             eval_str = "["
-            for ef in data.emotional_feedback:
-                eval_str += "(" + ef.is_fixed_feedback + "," + ef.repetitions + ", " + str(ef.face_to_show) + "),"
-            emotional_feedback = ast.literal_eval(eval_str[:-1] + "]")
+            for ef in data.emotional_feedback_list:
+                eval_str += "(" + str(ef.is_fixed_feedback) + "," + str(ef.repetitions) + "," + str(ef.face_to_show) + "),"
+	    print str(eval_str)
+	    # check if emotional feedback list is empty
+	    if eval_str == "[":
+	        emotional_feedback_list = [] 
+	    else:
+                emotional_feedback_list = ast.literal_eval(eval_str[:-1] + "]")
             rosparam.set_param_raw(self._NODE_NAME + "/emotional_feedback_list", data.emotional_feedback_list)
 
             # launch exercise instance as process
