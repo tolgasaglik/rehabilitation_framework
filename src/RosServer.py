@@ -37,15 +37,26 @@ class RosServer(object):
             rosparam.set_param_raw(self._NODE_NAME + "/rgb_colors", data.rgb_colors.data)
             rosparam.set_param_raw(self._NODE_NAME + "/repetitions_limit", data.repetitions)
             rosparam.set_param_raw(self._NODE_NAME + "/time_limit", data.time_limit)
-            rosparam.set_param_raw(self._NODE_NAME + "/calibration_points_left_arm", data.calibration_points_left_arm)
-            rosparam.set_param_raw(self._NODE_NAME + "/calibration_points_right_arm", data.calibration_points_right_arm)
+            # create array of calibration points from ROS message
+            calibration_points_left_arm = []
+            calibration_points_right_arm = []
+            eval_str = "["
+            for point in data.calibration_points_left_arm:
+                eval_str += "(" + point.x + "," + point.y + "),"
+            calibration_points_left_arm += ast.literal_eval(eval_str[:-1] + "]")
+            eval_str = "["
+            for point in data.calibration_points_right_arm:
+                eval_str += "(" + point.x + "," + point.y + "),"
+            calibration_points_right_arm += ast.literal_eval(eval_str[:-1] + "]")
+            rosparam.set_param_raw(self._NODE_NAME + "/calibration_points_left_arm", calibration_points_left_arm)
+            rosparam.set_param_raw(self._NODE_NAME + "/calibration_points_right_arm", calibration_points_right_arm)
             rosparam.set_param_raw(self._NODE_NAME + "/time_limit", data.time_limit)
             rosparam.set_param_raw(self._NODE_NAME + "/quantitative_frequency", data.quantitative_frequency)
             rosparam.set_param_raw(self._NODE_NAME + "/qualitative_frequency", data.qualitative_frequency)
             rosparam.set_param_raw(self._NODE_NAME + "/emotional_feedback_list", data.emotional_feedback_list)
 
             # launch exercise instance as process
-            launch_params = ['roslaunch', 'reha_game', 'Exercise_Launcher.launch']
+            launch_params = ['roslaunch', 'rehabilitation_framework', 'Exercise_Launcher.launch']
             self._exercise_instance = Popen(launch_params)
         else:
             rospy.loginfo("Received invalid exercise configuration! Aborting exercise creation.")

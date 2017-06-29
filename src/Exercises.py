@@ -784,7 +784,7 @@ if __name__ == '__main__':
             exercise = RotationExercise(calibration_output_file=args.calibration_output_file)
         else:
             exercise = SimpleMotionExercise(calibration_output_file=args.calibration_output_file)
-        if args.calibrate_only:
+        if args.calibrate_only and args.calibration_output_file != "":
             exercise.calibrate()
         else:
             exercise.start_game()

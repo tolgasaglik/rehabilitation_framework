@@ -63,7 +63,9 @@ def load_calib_file(filename):
 @pyqtSlot(object, int)
 def robot_finished_triggered(gui, status):
     if status != 0:
-        gui.msgCalibrationInterrupted.exec_()
+        gui.msgErrorWarning.setText("Calibration was interrupted! Please try to calibrate again.")
+        gui.msgErrorWarning.setWindowTitle("Calibration interrupted")
+        gui.msgErrorWarning.exec_()
     gui.enableAllWidgets()
 #------------------------
 
@@ -114,11 +116,9 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.msgRotationExercises.setStandardButtons(QMessageBox.Ok)
         
         # initialize calibration fail message box
-        self.msgCalibrationInterrupted = QMessageBox()
-        self.msgCalibrationInterrupted.setIcon(QMessageBox.Warning)
-        self.msgCalibrationInterrupted.setText("Calibration was interrupted! Please try to calibrate again.")
-        self.msgCalibrationInterrupted.setWindowTitle("Calibration interrupted")
-        self.msgCalibrationInterrupted.setStandardButtons(QMessageBox.Ok)
+        self.msgErrorWarning = QMessageBox()
+        self.msgErrorWarning.setIcon(QMessageBox.Warning)
+        self.msgErrorWarning.setStandardButtons(QMessageBox.Ok)
         
         # initialize list of faces (in string form)
         self._faces_list = ["sad", "happy", "crying"]
@@ -293,14 +293,6 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             return
         self._calibrate_only = False
         
-        # disable all other buttons while the chosen exercise is running
-        self.btnFlexionMotionExercise.setEnabled(False)
-        self.btnAbductionMotionExercise.setEnabled(False)
-        self.btnInternalRotationExercise.setEnabled(False)
-        self.btnExternalRotationExercise.setEnabled(False)
-        self.btnBegin.setEnabled(False)
-        self.btnStop.setEnabled(True)
-        
         # spawn exercise subprocess
         self.txtViewLogOutput.appendPlainText("******************** BEGIN EXERCISE ********************")
         msg = ExerciseInit()
@@ -334,13 +326,36 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             emotional_feedback.repetitions = int(self.tblEmotionalFeedback.item(i, 1).text())
             emotional_feedback.face_to_show = str(self.tblEmotionalFeedback.item(i, 0).text())
             msg.emotional_feedback_list.append(emotional_feedback)
-        msg.rgb_colors = load_color_file(str(self.lnColorFile.text()))
-        self.exercise_init_pub.publish(msg)
-        calib_data = load_calib_file(self.lnCalibFile.text())
+        # TODO: show error dialog if files fail to load
+        try:
+            msg.rgb_colors = load_color_file(str(self.lnColorFile.text()))
+        except ValueError:
+            self.msgErrorWarning.setText("The specified color file has invalid contents!")
+            self.msgErrorWarning.setWindowTitle("Invalid color file")
+            self.msgErrorWarning.exec_()
+            return
+        except IOError:
+            self.msgErrorWarning.setText("The specified color file could not be read! (does it exist?)")
+            self.msgErrorWarning.setWindowTitle("Could not read color file")
+            self.msgErrorWarning.exec_()
+            return
+        try:
+            calib_data = load_calib_file(self.lnCalibFile.text())
+        except ValueError:
+            self.msgErrorWarning.setText("The specified calibration file has invalid contents!")
+            self.msgErrorWarning.setWindowTitle("Invalid calibration file")
+            self.msgErrorWarning.exec_()
+            return
+        except IOError:
+            self.msgErrorWarning.setText("The specified calibration file could not be read! (does it exist?)")
+            self.msgErrorWarning.setWindowTitle("Could not read calibration file")
+            self.msgErrorWarning.exec_()
+            return
         msg.calibration_points_left_arm = calib_data[0]
         msg.calibration_points_right_arm = calib_data[1]
         self._exercise_init_pub.publish(msg)
         self.txtViewLogOutput.appendPlainText("Current exercise configuration:\n" + str(msg))
+        self.disableAllWidgets()
 
     def btnStopClicked(self):
         # stop exercise on robot
@@ -402,13 +417,27 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
                 return
             try:
                 request.rgb_color_list = load_color_file(str(self.lnColorFile.text()))
-            except IOError:
-                # TODO: maybe show error in dialog box instead?
-                print "Color file could not be read!"
-                return
             except ValueError:
-                # TODO: maybe show error in dialog box instead?
-                print "Color file has invalid contents!"
+                self.msgErrorWarning.setText("The specified color file has invalid contents!")
+                self.msgErrorWarning.setWindowTitle("Invalid color file")
+                self.msgErrorWarning.exec_()
+                return
+            except IOError:
+                self.msgErrorWarning.setText("The specified color file could not be read! (does it exist?)")
+                self.msgErrorWarning.setWindowTitle("Could not read color file")
+                self.msgErrorWarning.exec_()
+                return
+            try:
+                calib_data = load_calib_file(self.lnCalibFile.text())
+            except ValueError:
+                self.msgErrorWarning.setText("The specified calibration file has invalid contents!")
+                self.msgErrorWarning.setWindowTitle("Invalid calibration file")
+                self.msgErrorWarning.exec_()
+                return
+            except IOError:
+                self.msgErrorWarning.setText("The specified calibration file could not be read! (does it exist?)")
+                self.msgErrorWarning.setWindowTitle("Could not read calibration file")
+                self.msgErrorWarning.exec_()
                 return
             request.robot_position = self.cmbRobotPosition.currentIndex()
             request.calibration_duration = self.spnCalibDuration.value()
@@ -487,8 +516,14 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
                 calib_fileptr.write("motion_type=2\n")
                 calib_fileptr.write("rotation_type=0\n")
             calib_fileptr.write("robot_position=" + str(self.cmbRobotPosition.currentIndex()) + "\n")
-            calib_fileptr.write("calibration_points_left_arm=" + str(data.calibration_points_left_arm)+ "\n")
-            calib_fileptr.write("calibration_points_right_arm=" + str(data.calibration_points_right_arm)+ "\n")
+            calib_fileptr.write("calibration_points_left_arm=[")
+            for point in data.calibration_points_left_arm:
+                calib_fileptr.write("(" + str(point.x) + "," + str(point.y) + ")")
+            calib_fileptr.write("]\n")
+            calib_fileptr.write("calibration_points_right_arm=[")
+            for point in data.calibration_points_right_arm:
+                calib_fileptr.write("(" + str(point.x) + "," + str(point.y) + ")")
+            calib_fileptr.write("]\n")
             calib_fileptr.close()
         self._is_calibrating = False
         self.robot_finished.emit(self, data.status)
