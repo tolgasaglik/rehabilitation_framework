@@ -399,12 +399,8 @@ class Exercise:
         sleep(0.2)  # wait some miliseconds until the video reader grabs its first frame from the capture device
 
         # define tolerance values for both axis when calibrating manually
-        self._tolerance_x = camera_resolution[0] / 12
-        self._tolerance_y = camera_resolution[1] / 12
-        if camera_resolution[0] > 2*camera_resolution[1]:
-            self._tolerance_x = camera_resolution[0] / 6
-        elif 2*camera_resolution[0] < camera_resolution[1]:
-            self._tolerance_y = camera_resolution[1] / 6
+        self._tolerance_x = camera_resolution[0] / 15
+        self._tolerance_y = camera_resolution[1] / 15
 
 
     # ****************************** property definitions for the base class ******************************
@@ -691,7 +687,7 @@ class SimpleMotionExercise(Exercise):
                     if self._limb == Limb.LEFT_ARM: 
                         # check if calibration point is valid for the left arm
                         if len(self._calibration_points_left_arm) > 0 and ((self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.ABDUCTION or self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.FLEXION) and (abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[1]-self._video_reader.center[1]) < self._tolerance_y) \
-                        or ((self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.ABDUCTION or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.FLEXION or self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.FLEXION) and ((abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[0]-self._video_reader.center[0]) < self._tolerance_x) or (abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[1]-self._video_reader.center[1]) < self._tolerance_y)) \
+                        or ((self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.ABDUCTION or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.FLEXION or self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.FLEXION) and ((abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[0]-self._video_reader.center[0]) < self._tolerance_x) and (abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[1]-self._video_reader.center[1]) < self._tolerance_y-(self._tolerance_y/2))) \
                         or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.ABDUCTION and (abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[0]-self._video_reader.center[0]) < self._tolerance_x))):
                             self._encourager.say("The calibration points are too close to each other, please try again.")
                             self._calibration_points_left_arm = []
@@ -705,7 +701,7 @@ class SimpleMotionExercise(Exercise):
                         # else, check if calibration point is valid for the right arm
                         if len(self._calibration_points_right_arm) > 0 and (self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.ABDUCTION and (abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[0]-self._video_reader.center[0]) < self._tolerance_x) \
                         or ((self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.FLEXION or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.ABDUCTION) and (abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[1]-self._video_reader.center[1]) < self._tolerance_y)) \
-                        or ((self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.ABDUCTION or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.FLEXION or self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.FLEXION) and ((abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[0]-self._video_reader.center[0]) < self._tolerance_x) or (abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[1]-self._video_reader.center[1]) < self._tolerance_y)))):
+                        or ((self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.ABDUCTION or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.FLEXION or self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.FLEXION) and ((abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[0]-self._video_reader.center[0]) < self._tolerance_x) or (abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[1]-self._video_reader.center[1]) < self._tolerance_y-(self._tolerance_y/2))))):
                             self._encourager.say("The calibration points are too close to each other, please try again.")
                             self._calibration_points_right_arm = []
                         elif no_center_found_counter == 0:
