@@ -4,7 +4,7 @@ import rosparam
 from rehabilitation_framework.msg import *
 from std_msgs.msg import Bool
 from subprocess import Popen
-import os
+import os,ast
 from Exercises import MotionType, RotationType, SimpleMotionExercise, RotationExercise
 
 class RosServer(object):
@@ -110,9 +110,9 @@ class RosServer(object):
                 calibration_reply.status = 1
                 calibration_reply.calibration_points_left_arm = []
                 calibration_reply.calibration_points_right_arm = []
-            self._calibration_reply_pub.publish(calibration_reply)
 
             # clean up and return service response
+            self._calibration_reply_pub.publish(calibration_reply)
             del self._exercise_instance
             self._exercise_instance = None
 

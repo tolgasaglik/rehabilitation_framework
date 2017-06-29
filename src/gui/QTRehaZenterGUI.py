@@ -147,7 +147,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self._calibration_request_pub = rospy.Publisher("calibration_request", CalibrationRequest, queue_size=1)
         rospy.Subscriber("calibration_reply", CalibrationReply, self._calibration_reply_callback)
 
-	    # initialize some other necessary variables
+    # initialize some other necessary variables
         self._calibrate_only = False
         
         # connect functions to widgets
@@ -291,7 +291,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         if not self.btnInternalRotationExercise.isEnabled() or not self.btnExternalRotationExercise.isEnabled():
             self.msgRotationExercises.exec_()
             return
-	    self._calibrate_only = False
+        self._calibrate_only = False
         
         # disable all other buttons while the chosen exercise is running
         self.btnFlexionMotionExercise.setEnabled(False)
@@ -347,12 +347,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self._exercise_stop_pub.publish(self._calibrate_only)
 
         # enable all other buttons again
-        self.btnFlexionMotionExercise.setEnabled(True)
-        self.btnAbductionMotionExercise.setEnabled(True)
-        self.btnInternalRotationExercise.setEnabled(True)
-        self.btnExternalRotationExercise.setEnabled(True)
-        self.btnBegin.setEnabled(True)
-        self.btnStop.setEnabled(False)
+        self.enableAllWidgets()
         self.txtViewLogOutput.appendPlainText("********************* END EXERCISE *********************")
 
     def chkQuantitativeClicked(self):
@@ -396,8 +391,11 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         # create calibration service request message
             self._calibration_only = True
             request = CalibrationRequest()
-            if str(self.cmbCreateCalibFileFor.currentText()) == "flexion exercise" or str(self.cmbCreateCalibFileFor.currentText()) == "abduction exercise":
+            if str(self.cmbCreateCalibFileFor.currentText()) == "flexion exercise":
                 request.motion_type = 1
+                request.rotation_type = 0
+            elif str(self.cmbCreateCalibFileFor.currentText()) == "abduction exercise":
+                request.motion_type = 2
                 request.rotation_type = 0
             else:
                 self.msgRotationExercises.exec_()
@@ -419,9 +417,11 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             self._save_calib_filename = self.dlgSaveCalibFile.selectedFiles()[0]
 
             # publish request to topic
+            self._last_calib_request_msg = request
             self.disableAllWidgets()
             self.tabWidget.setCurrentIndex(1)
             self._calibration_request_pub.publish(request)
+            self.txtViewLogOutput.appendPlainText("Current calibration configuration:\n" + str(request))
 
     def tblEmotionalFeedbackItemClicked(self):
         self.btnDeleteLine.setEnabled(True)
@@ -480,9 +480,13 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             if not self._save_calib_filename.endsWith(".clb"):
                 self._save_calib_filename += ".clb"
             calib_fileptr = open(self._save_calib_filename, "w")
-            calib_fileptr.write("motion_type=" + str(data.motion_type) + "\n")
-            calib_fileptr.write("rotation_type=" + str(data.rotation_type) + "\n")
-            calib_fileptr.write("robot_position=" + str(data.robot_position) + "\n")
+            if str(self.cmbCreateCalibFileFor.currentText()) == "flexion exercise":
+                calib_fileptr.write("motion_type=1\n")
+                calib_fileptr.write("rotation_type=0\n")
+            elif str(self.cmbCreateCalibFileFor.currentText()) == "abduction exercise":
+                calib_fileptr.write("motion_type=2\n")
+                calib_fileptr.write("rotation_type=0\n")
+            calib_fileptr.write("robot_position=" + str(self.cmbRobotPosition.currentIndex()) + "\n")
             calib_fileptr.write("calibration_points_left_arm=" + str(data.calibration_points_left_arm)+ "\n")
             calib_fileptr.write("calibration_points_right_arm=" + str(data.calibration_points_right_arm)+ "\n")
             calib_fileptr.close()

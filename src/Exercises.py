@@ -161,7 +161,7 @@ class VideoReader(Thread):
         #self.set_kill_thread()
 
         # Minimum required radius of enclosing circle of contour
-        MIN_RADIUS = 25
+        MIN_RADIUS = 10
 
         # read frames from the capture device until interruption
         while not self._kill_thread:
@@ -375,7 +375,6 @@ class Exercise:
         else:
             rospy.logerr("Required parameter rgb_colors is not set on server! Aborting.")
             sys.exit()
-
         if rospy.has_param('/reha_exercise/number_of_blocks'):
             self._number_of_blocks = rosparam.get_param("/reha_exercise/number_of_blocks")
         if rospy.has_param('/reha_exercise/repetitions_limit'):
@@ -642,7 +641,7 @@ class SimpleMotionExercise(Exercise):
 
         # Main calibration loop
         timer = None
-        encourager_guide_flag = True
+        encourager_guide_flag = False
         no_center_found_counter = 0
         no_center_found_flag = False
         # sleep for 2 seconds in order to wait for soundplay to be ready
@@ -652,20 +651,20 @@ class SimpleMotionExercise(Exercise):
             if encourager_guide_flag:
                 if self._limb == Limb.LEFT_ARM:
                     if len(self._calibration_points_left_arm) == 0:
-                        self._encourager.say("Please lay your left hand on the table, close to you, and hold for a few seconds.")
+                        self._encourager.say("Please lay your left hand on the table, close to you.")
                     else:   
                         if self._motion_type == MotionType.FLEXION:
-                            self._encourager.say("Now, stretch your left arm out in front of you on the table and hold the position.")
+                            self._encourager.say("Now, stretch your left arm out in front of you on the table.")
                         else:
-                            self._encourager.say("Now, stretch your left arm diagonally up and left on the table and hold the position.")
+                            self._encourager.say("Now, stretch your left arm diagonally up and left on the table.")
                 elif self._limb == Limb.RIGHT_ARM:
                     if len(self.calibration_points_right_arm) == 0:
-                        self._encourager.say("Next, please lay your right hand on the table, close to you, and hold for a few seconds.")
+                        self._encourager.say("Next, please lay your right hand on the table, close to you.")
                     else:   
                         if self._motion_type == MotionType.FLEXION:
-                            self._encourager.say("Now, stretch your right arm out in front of you on the table and hold the position.")
+                            self._encourager.say("Now, stretch your right arm out in front of you on the table.")
                         else:
-                            self._encourager.say("Now, stretch your right arm diagonally up and right on the table and hold the position.")
+                            self._encourager.say("Now, stretch your right arm diagonally up and right on the table.")
                 encourager_guide_flag = False
 
             # get next frame from capture device
@@ -683,7 +682,7 @@ class SimpleMotionExercise(Exercise):
                 if no_center_found_counter > 0:
                     no_center_found_counter -= 1
                     if no_center_found_counter == 0 and no_center_found_flag:
-                        self._encourager.say("Let's try to calibrate again!")
+                        self._encourager.say("Okay, I can see your object now!")
                         no_center_found_flag = False
                         #encourager_guide_flag = True
                 # store coordinates when timer has run out
@@ -694,7 +693,7 @@ class SimpleMotionExercise(Exercise):
                         if len(self._calibration_points_left_arm) > 0 and ((self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.ABDUCTION or self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.FLEXION) and (abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[1]-self._video_reader.center[1]) < self._tolerance_y) \
                         or ((self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.ABDUCTION or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.FLEXION or self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.FLEXION) and ((abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[0]-self._video_reader.center[0]) < self._tolerance_x) or (abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[1]-self._video_reader.center[1]) < self._tolerance_y)) \
                         or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.ABDUCTION and (abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[0]-self._video_reader.center[0]) < self._tolerance_x))):
-                            self._encourager.say("The calibration points are too close to each other. Please make sure that the points are further away from each other.")
+                            self._encourager.say("The calibration points are too close to each other, please try again.")
                             self._calibration_points_left_arm = []
                         elif no_center_found_counter == 0:
                             # take last valid centroid that was found by video reader and store coordinates
@@ -707,12 +706,11 @@ class SimpleMotionExercise(Exercise):
                         if len(self._calibration_points_right_arm) > 0 and (self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.ABDUCTION and (abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[0]-self._video_reader.center[0]) < self._tolerance_x) \
                         or ((self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.FLEXION or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.ABDUCTION) and (abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[1]-self._video_reader.center[1]) < self._tolerance_y)) \
                         or ((self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.ABDUCTION or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.FLEXION or self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.FLEXION) and ((abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[0]-self._video_reader.center[0]) < self._tolerance_x) or (abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[1]-self._video_reader.center[1]) < self._tolerance_y)))):
-                            self._encourager.say("The calibration points are too close to each other. Please make sure that the points are further away from each other.")
+                            self._encourager.say("The calibration points are too close to each other, please try again.")
                             self._calibration_points_right_arm = []
                         elif no_center_found_counter == 0:
                             # take last valid centroid that was found by video reader and store coordinates
                             self._calibration_points_right_arm.append(self._video_reader.last_valid_center)
-                            print(len(self._calibration_points_right_arm))
                     timer = None
             elif no_center_found_counter < NO_CENTER_FOUND_MAX:
                 no_center_found_counter += 1
@@ -751,7 +749,8 @@ class SimpleMotionExercise(Exercise):
                 calib_output_file.write("calibration_points_left_arm=" + str(self._calibration_points_left_arm)+ "\n")
                 calib_output_file.write("calibration_points_right_arm=" + str(self._calibration_points_right_arm)+ "\n")
         else:
-            self._encourager.say("Calibration failed/interrupted!")
+            self._encourager.say("Calibration interrupted!")
+	sleep(2)
 
 
 
