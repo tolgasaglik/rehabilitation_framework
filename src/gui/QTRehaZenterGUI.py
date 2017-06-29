@@ -42,13 +42,16 @@ def load_calib_file(filename):
     calib_fileptr = open(filename, "r")
     calibration_points_left_arm = []
     calibration_points_right_arm = []
-    for line in calib_fileptr,readline():
-        if line.startswith("left_arm="):
-            cb_points_from_file = ast.literal_eval(line[9:])
-        elif line.startswith("right_arm="):
-                cb_points_from_file = ast.literal_eval(line[10:])
-        else:
-            raise ValueError("Invalid file contents!")
+    # TODO: add checks to see if the calibration data corresponds to current exercise settings
+    for line in calib_fileptr.readlines():
+        if line.startswith("calibration_points_left_arm="):
+            cb_points_from_file = ast.literal_eval(line[28:])
+            if len(cb_points_from_file) == 0:
+                raise ValueError("Invalid file contents!")
+        elif line.startswith("calibration_points_right_arm="):
+            cb_points_from_file = ast.literal_eval(line[29:])
+            if len(cb_points_from_file) == 0:
+                raise ValueError("Invalid file contents!")
     for cb_point in cb_points_from_file:
         point_to_add = CalibrationPoint()
         point_to_add.x = cb_point[0]
@@ -291,6 +294,16 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         if not self.btnInternalRotationExercise.isEnabled() or not self.btnExternalRotationExercise.isEnabled():
             self.msgRotationExercises.exec_()
             return
+        elif self.lnColorFile.text() == "":
+            self.msgErrorWarning.setText("Please select a color file in the \"Calibration preferences\" tab before proceeding.")
+            self.msgErrorWarning.setWindowTitle("No color file selected")
+            self.msgErrorWarning.exec_()
+            return
+        elif self.lnCalibFile.text() == "":
+            self.msgErrorWarning.setText("Please select a calibration file in the \"Calibration preferences\" tab before proceeding.")
+            self.msgErrorWarning.setWindowTitle("No calibration file selected")
+            self.msgErrorWarning.exec_()
+            return
         self._calibrate_only = False
         
         # spawn exercise subprocess
@@ -316,17 +329,18 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
                 msg.qualitative_frequency = 1
         else:
             msg.qualitative_frequency = 0
-            msg.qualitative_frequency = self.spnQualiEnc.value()
         msg.robot_position = self.cmbRobotPosition.currentIndex()
         msg.rotation_type = 0
         msg.emotional_feedback_list = []
-        for i in range(0,self.tblEmotionalFeedback.columnCount()):
-            emotional_feedback = EmotionalFeedback()
-            emotional_feedback.is_fixed_feedback = (str(self.tblEmotionalFeedback.item(i, 0).text()) == "fixed")
-            emotional_feedback.repetitions = int(self.tblEmotionalFeedback.item(i, 1).text())
-            emotional_feedback.face_to_show = str(self.tblEmotionalFeedback.item(i, 0).text())
-            msg.emotional_feedback_list.append(emotional_feedback)
-        # TODO: show error dialog if files fail to load
+        if self.tblEmotionalFeedback.rowCount() > 0:
+            for i in range(0,self.tblEmotionalFeedback.columnCount()-1):
+                print i
+                emotional_feedback = EmotionalFeedback()
+                emotional_feedback.is_fixed_feedback = (str(self.tblEmotionalFeedback.item(i, 0).text()) == "fixed")
+                emotional_feedback.repetitions = int(self.tblEmotionalFeedback.item(i, 1).text())
+                emotional_feedback.face_to_show = str(self.tblEmotionalFeedback.item(i, 0).text())
+                msg.emotional_feedback_list.append(emotional_feedback)
+        # show error dialog if files fail to load
         try:
             msg.rgb_colors = load_color_file(str(self.lnColorFile.text()))
         except ValueError:
@@ -402,6 +416,11 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.btnDeleteLine.setEnabled(False)
      
     def btnCalibrateNowClicked(self):
+        if self.lnColorFile.text() == "":
+            self.msgErrorWarning.setText("Please select a color file in the \"Calibration preferences\" tab before proceeding.")
+            self.msgErrorWarning.setWindowTitle("No color file selected")
+            self.msgErrorWarning.exec_()
+            return
         if self.dlgSaveCalibFile.exec_():
         # create calibration service request message
             self._calibration_only = True
@@ -425,18 +444,6 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             except IOError:
                 self.msgErrorWarning.setText("The specified color file could not be read! (does it exist?)")
                 self.msgErrorWarning.setWindowTitle("Could not read color file")
-                self.msgErrorWarning.exec_()
-                return
-            try:
-                calib_data = load_calib_file(self.lnCalibFile.text())
-            except ValueError:
-                self.msgErrorWarning.setText("The specified calibration file has invalid contents!")
-                self.msgErrorWarning.setWindowTitle("Invalid calibration file")
-                self.msgErrorWarning.exec_()
-                return
-            except IOError:
-                self.msgErrorWarning.setText("The specified calibration file could not be read! (does it exist?)")
-                self.msgErrorWarning.setWindowTitle("Could not read calibration file")
                 self.msgErrorWarning.exec_()
                 return
             request.robot_position = self.cmbRobotPosition.currentIndex()
@@ -516,14 +523,16 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
                 calib_fileptr.write("motion_type=2\n")
                 calib_fileptr.write("rotation_type=0\n")
             calib_fileptr.write("robot_position=" + str(self.cmbRobotPosition.currentIndex()) + "\n")
-            calib_fileptr.write("calibration_points_left_arm=[")
+            calib_fileptr.write("calibration_points_left_arm=")
+            str_to_write = "["
             for point in data.calibration_points_left_arm:
-                calib_fileptr.write("(" + str(point.x) + "," + str(point.y) + ")")
-            calib_fileptr.write("]\n")
-            calib_fileptr.write("calibration_points_right_arm=[")
+                str_to_write += "(" + str(point.x) + "," + str(point.y) + "),"
+            calib_fileptr.write(str_to_write[:-1] + "]\n")
+            calib_fileptr.write("calibration_points_right_arm=")
+            str_to_write = "["
             for point in data.calibration_points_right_arm:
-                calib_fileptr.write("(" + str(point.x) + "," + str(point.y) + ")")
-            calib_fileptr.write("]\n")
+                str_to_write += "(" + str(point.x) + "," + str(point.y) + "),"
+            calib_fileptr.write(str_to_write[:-1] + "]\n")
             calib_fileptr.close()
         self._is_calibrating = False
         self.robot_finished.emit(self, data.status)

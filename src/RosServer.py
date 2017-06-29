@@ -25,6 +25,8 @@ class RosServer(object):
         rospy.spin()
 
     def _exercise_init_callback(self, data):
+        rospy.loginfo("Received exercise request.")
+        rospy.loginfo("Message contents:\n" + str(data))
         if self._exercise_instance != None:
             rospy.loginfo("Another exercise instance is already running! Aborting exercise creation.")
         elif ((data.motion_type == MotionType.FLEXION or data.motion_type == MotionType.ABDUCTION) and data.rotation_type == RotationType._unused) or ((data.rotation_type == RotationType.INTERNAL or data.rotation_type == RotationType.EXTERNAL) and data.motion_type == MotionType._unused):
