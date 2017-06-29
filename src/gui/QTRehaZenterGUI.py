@@ -7,7 +7,7 @@
 # WARNING! All changes made in this file will be lost!
 
 from PyQt4 import QtCore, QtGui
-from PyQt4.QtCore import QThread, QRectF, Qt
+from PyQt4.QtCore import QThread, QRectF, Qt, pyqtSignal, pyqtSlot
 from PyQt4.QtGui import QMessageBox, QFileDialog, QWidget, QTabWidget, QLabel, QImage, QPixmap, QGraphicsScene, QGraphicsPixmapItem, QHeaderView, QTableWidgetItem
 import os,sys,inspect,ast
 import rospy
@@ -20,7 +20,6 @@ from PyQt4 import uic
 import Exercises
 from Exercises import Limb,RotationType,MotionType,RobotPosition
 from rehabilitation_framework.msg import *
-from rehabilitation_framework.srv import *
 from std_msgs.msg import Bool
 import DefineNewColor
 
@@ -60,9 +59,17 @@ def load_calib_file(filename):
             calibration_points_right_arm.append(point_to_add)
     calib_fileptr.close()
     return (calibration_points_left_arm, calibration_points_right_arm)
+
+@pyqtSlot(object, int)
+def robot_finished_triggered(gui, status):
+    if status != 0:
+        gui.msgCalibrationInterrupted.exec_()
+    gui.enableAllWidgets()
 #------------------------
 
 class QTRehaZenterGUI(QtGui.QMainWindow):
+    robot_finished = pyqtSignal(object, int, name="robot_finished")
+    _save_calib_filename = ""
     def __init__(self):
         super(QTRehaZenterGUI, self).__init__()
         uic.loadUi('ui_files/QTRehaZenterGUI.ui', self)
@@ -135,8 +142,10 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         
         # initialize ROS publisher topics
         rospy.init_node("reha_interface", anonymous=True)
-        exercise_init_pub = rospy.Publisher("reha_exercise_init", ExerciseInit)
-        exercise_stop_pub = rospy.Publisher("reha_exercise_stop", Bool)
+        self._exercise_init_pub = rospy.Publisher("exercise_init", ExerciseInit, queue_size=1)
+        self._exercise_stop_pub = rospy.Publisher("exercise_stop", Bool, queue_size=1)
+        self._calibration_request_pub = rospy.Publisher("calibration_request", CalibrationRequest, queue_size=1)
+        rospy.Subscriber("calibration_reply", CalibrationReply, self._calibration_reply_callback)
 
 	    # initialize some other necessary variables
         self._calibrate_only = False
@@ -162,6 +171,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.btnLoadColorFile.clicked.connect(self.btnLoadColorFileClicked)
         self.btnLoadCalibFile.clicked.connect(self.btnLoadCalibFileClicked)
         self.btnCalibrateNow.clicked.connect(self.btnCalibrateNowClicked)
+        self.robot_finished.connect(robot_finished_triggered)
     
     # **** some helper functions specific to the class ****
     def disableAllWidgets(self):
@@ -334,7 +344,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 
     def btnStopClicked(self):
         # stop exercise on robot
-        self.exercise_stop_pub.publish(self._calibrate_only)
+        self._exercise_stop_pub.publish(self._calibrate_only)
 
         # enable all other buttons again
         self.btnFlexionMotionExercise.setEnabled(True)
@@ -406,34 +416,12 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             request.calibration_duration = self.spnCalibDuration.value()
             request.camera_width = self.spnWidth.value()
             request.camera_height = self.spnHeight.value()
+            self._save_calib_filename = self.dlgSaveCalibFile.selectedFiles()[0]
 
-            # publish request to service and wait for response
-            rospy.wait_for_service('calibrate')
+            # publish request to topic
             self.disableAllWidgets()
             self.tabWidget.setCurrentIndex(1)
-            try:
-                calibrate = rospy.ServiceProxy('calibrate', Calibration)
-                response = calibrate(request)
-            except rospy.ServiceException, e:
-                # TODO: maybe show error in dialog box instead?
-                print "Service call failed: %s"%e
-                return
-             
-            # write calibration points to file
-            if response.status == 0:
-                filename = self.dlgSaveCalibFile.selectedFiles()[0]
-                if not filename.endsWith(".clb"):
-                    filename += ".clb"
-                    calib_fileptr = open(filename, "w")
-                    calib_fileptr.write("motion_type=" + str(request.motion_type) + "\n")
-                    calib_fileptr.write("rotation_type=" + str(request.rotation_type) + "\n")
-                    calib_fileptr.write("robot_position=" + str(request.robot_position) + "\n")
-                    calib_fileptr.write("calibration_points_left_arm=" + str(response.calibration_points_left_arm.data)+ "\n")
-                    calib_fileptr.write("calibration_points_right_arm=" + str(response.calibration_points_right_arm.data)+ "\n")
-                    calib_fileptr.close()
-            else:
-                self.enableAllWidgets()
-                self.msgCalibrationInterrupted.exec_()
+            self._calibration_request_pub.publish(request)
 
     def tblEmotionalFeedbackItemClicked(self):
         self.btnDeleteLine.setEnabled(True)
@@ -485,6 +473,23 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             event.accept()
         else:
             event.ignore()
+
+    def _calibration_reply_callback(self, data):
+        # write calibration points to file
+        if data.status == 0:
+            if not self._save_calib_filename.endsWith(".clb"):
+                self._save_calib_filename += ".clb"
+            calib_fileptr = open(self._save_calib_filename, "w")
+            calib_fileptr.write("motion_type=" + str(data.motion_type) + "\n")
+            calib_fileptr.write("rotation_type=" + str(data.rotation_type) + "\n")
+            calib_fileptr.write("robot_position=" + str(data.robot_position) + "\n")
+            calib_fileptr.write("calibration_points_left_arm=" + str(data.calibration_points_left_arm)+ "\n")
+            calib_fileptr.write("calibration_points_right_arm=" + str(data.calibration_points_right_arm)+ "\n")
+            calib_fileptr.close()
+        self._is_calibrating = False
+        self.robot_finished.emit(self, data.status)
+
+        
 # *******************************************************************************************
          
 if __name__ == "__main__":

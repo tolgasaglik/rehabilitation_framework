@@ -770,27 +770,31 @@ if __name__ == '__main__':
 
     # parameters checking
     if not (rospy.has_param("/reha_exercise/calibration_duration") and rospy.has_param("/reha_exercise/camera_width") and rospy.has_param("/reha_exercise/camera_height") and rospy.has_param("/reha_exercise/robot_position") and rospy.has_param("/reha_exercise/rgb_colors") and rospy.has_param("/reha_exercise/motion_type") and rospy.has_param("/reha_exercise/rotation_type")):    
-        rospy.logerr("ERROR: not all required parameters are set on the parameter server for calibration! Aborting.")
-        sys.exit()
+        print("ERROR: not all required parameters are set on the parameter server for calibration! Aborting.")
+        sys.exit(1)
     else:
         ros_motion_type = rosparam.get_param("/reha_exercise/motion_type")
         ros_rotation_type = rosparam.get_param("/reha_exercise/rotation_type")
         if not args.calibrate_only and not (rospy.has_param("/reha_exercise/quantitative_frequency") and rospy.has_param("/reha_exercise/qualitative_frequency") and rospy.has_param("/reha_exercise/calibration_points_left_arm") and rospy.has_param("/reha_exercise/calibration_points_left_arm") and rospy.has_param("/reha_exercise/emotional_feedbacks")):
-            rospy.logerr("ERROR: not all required parameters are set on the parameter server for the exercise! Aborting.")
-            sys.exit()
+            print("ERROR: not all required parameters are set on the parameter server for the exercise! Aborting.")
+            sys.exit(1)
         elif not (ros_motion_type == 0 and ros_rotation_type > 0 or ros_motion_type > 0 and ros_rotation_type == 0):
-            rospy.logerr("ERROR: parameter server contains invalid exercise parameters! Aborting.")
-            sys.exit()
-        elif args.calibrate_only and args.calibration_output_file != "":
-            rospy.logerr("ERROR: Output calibration file path not set!")
-            sys.exit()
-    if ros_motion_type == 0 and ros_rotation_type > 0:
-        exercise = RotationExercise()
-    else:
-        exercise = SimpleMotionExercise()
-    if args.calibrate_only:
-        exercise.calibrate()
-    else:
-        exercise.start_game()
-    exercise.stop_game()
-    sys.exit()
+            print("ERROR: parameter server contains invalid exercise parameters! Aborting.")
+            sys.exit(2)
+        elif args.calibrate_only and args.calibration_output_file == "":
+            print("ERROR: Output calibration file path not set!")
+            sys.exit(3)
+    try:
+        if ros_motion_type == 0 and ros_rotation_type > 0:
+            exercise = RotationExercise(calibration_output_file=args.calibration_output_file)
+        else:
+            exercise = SimpleMotionExercise(calibration_output_file=args.calibration_output_file)
+        if args.calibrate_only:
+            exercise.calibrate()
+        else:
+            exercise.start_game()
+        exercise.stop_game()
+    except Exception as e:
+        print("An error occured when launching the exercise!\n" + str(e))
+        sys.exit(4)
+    sys.exit(0)
