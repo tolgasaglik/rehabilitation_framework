@@ -18,7 +18,7 @@ class RosServer(object):
         rospy.Subscriber("exercise_init", ExerciseInit, self._exercise_init_callback)
         rospy.Subscriber("calibration_request", CalibrationRequest, self._calibration_request_callback)
         rospy.Subscriber("exercise_stop", Bool, self._exercise_stop_callback)
-        self._calibration_reply_pub = rospy.Publisher("calibration_reply", CalibrationReply, queue_size=1)
+        self._server_reply_pub = rospy.Publisher("server_reply", ServerReply, queue_size=1)
 
         # spin() simply keeps python from exiting until this node is stopped
         rospy.loginfo("ROS Server initialized, listening for messages now...")
@@ -74,18 +74,39 @@ class RosServer(object):
             emotional_feedback_list = []
             eval_str = "["
             for ef in data.emotional_feedback_list:
-                eval_str += "(" + str(ef.is_fixed_feedback) + "," + str(ef.repetitions) + "," + str(ef.face_to_show) + "),"
+                eval_str += "(" + str(ef.is_fixed_feedback) + "," + str(ef.repetitions) + ",'" + str(ef.face_to_show) + "'),"
 
             # check if emotional feedback list is empty
             if eval_str == "[":
                 emotional_feedback_list = [] 
             else:
                 emotional_feedback_list = ast.literal_eval(eval_str[:-1] + "]")
-                rosparam.set_param_raw(self._NODE_NAME + "/emotional_feedback_list", data.emotional_feedback_list)
+                rosparam.set_param_raw(self._NODE_NAME + "/emotional_feedback_list", emotional_feedback_list)
 
             # launch exercise instance as process
+            rospy.loginfo("Running exercise with current configuration...")
             launch_params = ['roslaunch', 'rehabilitation_framework', 'Exercise_Launcher.launch']
             self._exercise_instance = Popen(launch_params)
+            self._exercise_instance.wait()
+
+	    # check exit code of exercise
+	    server_reply = ServerReply()
+	    if self._exercise_instance.returncode > 0:
+                rospy.loginfo("Exercise process was interrupted!")
+                server_reply.status = 3
+                server_reply.calibration_points_left_arm = []
+                server_reply.calibration_points_right_arm = []
+            else:
+                rospy.loginfo("Exercise process was completed successfully!")
+                server_reply.status = 2
+                server_reply.calibration_points_left_arm = []
+                server_reply.calibration_points_right_arm = []
+		
+            # clean up
+            self._server_reply_pub.publish(server_reply)
+            del self._exercise_instance
+	    self._exercise_instance = None
+		
         else:
             rospy.loginfo("Received invalid exercise configuration! Aborting exercise creation.")
 
@@ -116,15 +137,17 @@ class RosServer(object):
                 local_rgb_colors.append((color.red, color.green, color.blue))
             rosparam.set_param_raw(self._NODE_NAME + "/rgb_colors", local_rgb_colors)
 
-            # launch exercise instance as process
+            # launch calibration process (as an exercise instance)
+            rospy.loginfo("Running calibration process with current configuration...")
             launch_params = ['roslaunch', 'rehabilitation_framework', 'Exercise_Launcher.launch', 'calibration_output_file:=/tmp/temp_calib_file.clb']
             self._exercise_instance = Popen(launch_params)
             self._exercise_instance.wait()
 
             # retrieve calibration file written by exercise subprocess and send data to GUI client
-            calibration_reply = CalibrationReply()
-            if os.path.exists("/tmp/temp_calib_file.clb"):
+            server_reply = ServerReply()
+            if os.path.exists("/tmp/temp_calib_file.clb") and self._exercise_instance.returncode == 0:
                 # retrieve created file and send contents over to GUI
+            	rospy.loginfo("Calibration process completed successfully!")
                 left_arm_points = []
                 right_arm_points = []
                 with open("/tmp/temp_calib_file.clb", "r") as temp_calib_file:
@@ -139,19 +162,18 @@ class RosServer(object):
                             for point in temp_list:
                                 new_point = CalibrationPoint(point[0], point[1])
                                 right_arm_points.append(new_point)
-                calibration_reply.status = 0
-                calibration_reply.calibration_points_left_arm = left_arm_points
-                calibration_reply.calibration_points_right_arm = right_arm_points
+                server_reply.status = 0
+                server_reply.calibration_points_left_arm = left_arm_points
+                server_reply.calibration_points_right_arm = right_arm_points
                 os.remove("/tmp/temp_calib_file.clb")
-                # store calibration settings in parameter server
             else:
                 rospy.loginfo("Calibration process was interrupted! Unable to record calibration data...")
-                calibration_reply.status = 1
-                calibration_reply.calibration_points_left_arm = []
-                calibration_reply.calibration_points_right_arm = []
+                server_reply.status = 1
+                server_reply.calibration_points_left_arm = []
+                server_reply.calibration_points_right_arm = []
 
             # clean up and return service response
-            self._calibration_reply_pub.publish(calibration_reply)
+            self._server_reply_pub.publish(server_reply)
             del self._exercise_instance
             self._exercise_instance = None
 
@@ -164,7 +186,6 @@ class RosServer(object):
                 rospy.loginfo("Received request to finish exercise, cleaning up...")
                 self._exercise_instance.terminate()
                 self._exercise_instance.wait()
-                self._exercise_instance = None
                 rospy.loginfo("Exercise terminated successfully!")
         else:
             if self._exercise_instance == None:
@@ -172,6 +193,7 @@ class RosServer(object):
             else:
                 rospy.loginfo("Received request to stop calibration, cleaning up...")
                 self._exercise_instance.terminate()
+                self._exercise_instance.wait()
                 if os.path.exists("/tmp/temp_calib_file.clb"):
                     os.remove("/tmp/temp_calib_file.clb")
 

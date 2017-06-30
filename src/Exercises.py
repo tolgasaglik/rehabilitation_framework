@@ -251,7 +251,7 @@ class EncouragerUnit(object):
         self._face_pub = rospy.Publisher('/qt_face/setEmotion', String, queue_size=1)
         self.load_sentences()
         self._repetitions_limit = repetitions_limit
-    self._repetitions_counter = 0
+	self._repetitions_counter = 0
         self._emotional_feedbacks = emotional_feedbacks
         self._quantitative_frequency = quantitative_frequency
         self._qualitative_frequency = qualitative_frequency
@@ -398,8 +398,8 @@ class Exercise:
         sleep(0.2)  # wait some miliseconds until the video reader grabs its first frame from the capture device
 
         # define tolerance values for both axis when calibrating manually
-        self._tolerance_x = camera_resolution[0] / 15
-        self._tolerance_y = camera_resolution[1] / 15
+        self._tolerance_x = camera_resolution[0] / 12
+        self._tolerance_y = camera_resolution[1] / 12
 
 
     # ****************************** property definitions for the base class ******************************
@@ -513,6 +513,8 @@ class Exercise:
         # Main loop
         index=0
         current_block=1
+        # sleep for 2 seconds in order to wait for soundplay and video reader to be ready
+        sleep(2)
         self._encourager.say("You may begin your exercise now!")
         #timer = None
         if self.time_limit > 0:
@@ -530,8 +532,9 @@ class Exercise:
                         if self._encourager.repetitions == self._encourager.repetitions_limit:
                             self._encourager.say("Block " + str(current_block) + " finished!")
                             if current_block < self._number_of_blocks:
-                                self._encourager.say("Take a 20 seconds break.")
-                                sleep(20)
+				# let patient take a break (probably not needed for now)
+                                #self._encourager.say("Take a 20 seconds break.")
+                                #sleep(20)
                                 self._encourager.reset_repetitions_counter()
                                 enc_sentence = "Now, continue your exercise with your "
                                 if self._limb == Limb.LEFT_ARM:
@@ -546,7 +549,22 @@ class Exercise:
                             current_block += 1
                             
             # display images and quit loop if "q"-key was pressed
-            cv2.imshow("Original image", self._video_reader.img_original)
+	    img_mod = self._video_reader.img_original.copy()
+	    if self._limb == Limb.LEFT_ARM:
+		for i,point in enumerate(self._calibration_points_left_arm):
+		    if i == index:
+			color = np.array([255,255,0])
+		    else:
+			color = np.array([0,0,255])
+                    cv2.rectangle(img_mod, (point[0]+self._tolerance_x,point[1]+self._tolerance_y), (point[0]-self._tolerance_x,point[1]-self._tolerance_y), color, -1)
+	    else:
+		for i,point in enumerate(self._calibration_points_right_arm):
+		    if i == index:
+			color = np.array([255,255,0])
+		    else:
+			color = np.array([0,0,255])
+                    cv2.rectangle(img_mod, (point[0]+self._tolerance_x,point[1]+self._tolerance_y), (point[0]-self._tolerance_x,point[1]-self._tolerance_y), color, -1)
+            cv2.imshow("Original image", img_mod)
             cv2.imshow("Detected blobs", self._video_reader.img_modified)
 
             # check termination conditions
@@ -632,14 +650,14 @@ class SimpleMotionExercise(Exercise):
         self._calibration_points_right_arm = []
 
         # number of frames to wait when no object detected (before warning user)
-        NO_CENTER_FOUND_MAX = 200
+        NO_CENTER_FOUND_MAX = 300
 
         # Main calibration loop
         timer = None
         encourager_guide_flag = False
         no_center_found_counter = 0
         no_center_found_flag = False
-        # sleep for 2 seconds in order to wait for soundplay to be ready
+        # sleep for 2 seconds in order to wait for soundplay and video reader to be ready
         sleep(2)
         while len(self._calibration_points_right_arm) < number_of_calibration_points:
             # tell encourager to say a sentence, if needed
@@ -666,7 +684,7 @@ class SimpleMotionExercise(Exercise):
             frame = self._video_reader.img_modified
 
             # (re-)initialize timer if necessary
-            if timer == None and no_center_found_counter < NO_CENTER_FOUND_MAX:
+            if timer == None and no_center_found_counter == 0:
                 timer = Timer(self.calibration_duration)
                 timer.start()
                 #if (self._limb == Limb.LEFT_ARM and len(self._calibration_points_left_arm) > 0) or (self._limb == Limb.RIGHT_ARM and len(self._calibration_points_right_arm) > 0):
@@ -675,8 +693,8 @@ class SimpleMotionExercise(Exercise):
             # if no object was found in the video capture for some time, wait for object to reappear
             if self._video_reader.center != None:
                 if no_center_found_counter > 0:
-                    no_center_found_counter -= 1
-                    if no_center_found_counter == 0 and no_center_found_flag:
+                    no_center_found_counter = 0
+                    if no_center_found_flag:
                         self._encourager.say("Okay, I can see your object now!")
                         no_center_found_flag = False
                         #encourager_guide_flag = True
@@ -763,13 +781,13 @@ if __name__ == '__main__':
     args = parser.parse_args(rospy.myargv()[1:])
 
     # parameters checking
-    if not (rospy.has_param("/reha_exercise/calibration_duration") and rospy.has_param("/reha_exercise/camera_width") and rospy.has_param("/reha_exercise/camera_height") and rospy.has_param("/reha_exercise/robot_position") and rospy.has_param("/reha_exercise/rgb_colors") and rospy.has_param("/reha_exercise/motion_type") and rospy.has_param("/reha_exercise/rotation_type")):    
+    if args.calibrate_only and not (rospy.has_param("/reha_exercise/calibration_duration") and rospy.has_param("/reha_exercise/camera_width") and rospy.has_param("/reha_exercise/camera_height") and rospy.has_param("/reha_exercise/robot_position") and rospy.has_param("/reha_exercise/rgb_colors") and rospy.has_param("/reha_exercise/motion_type") and rospy.has_param("/reha_exercise/rotation_type")):    
         print("ERROR: not all required parameters are set on the parameter server for calibration! Aborting.")
         sys.exit(1)
     else:
         ros_motion_type = rosparam.get_param("/reha_exercise/motion_type")
         ros_rotation_type = rosparam.get_param("/reha_exercise/rotation_type")
-        if not args.calibrate_only and not (rospy.has_param("/reha_exercise/quantitative_frequency") and rospy.has_param("/reha_exercise/qualitative_frequency") and rospy.has_param("/reha_exercise/calibration_points_left_arm") and rospy.has_param("/reha_exercise/calibration_points_left_arm") and rospy.has_param("/reha_exercise/emotional_feedback_list")):
+        if not args.calibrate_only and not (rospy.has_param("/reha_exercise/quantitative_frequency") or rospy.has_param("/reha_exercise/qualitative_frequency") or rospy.has_param("/reha_exercise/number_of_blocks") or rospy.has_param("/reha_exercise/calibration_points_left_arm") or rospy.has_param("/reha_exercise/calibration_points_right_arm") or rospy.has_param("/reha_exercise/emotional_feedback_list")):
             print("ERROR: not all required parameters are set on the parameter server for the exercise! Aborting.")
             sys.exit(1)
         elif not (ros_motion_type == 0 and ros_rotation_type > 0 or ros_motion_type > 0 and ros_rotation_type == 0):

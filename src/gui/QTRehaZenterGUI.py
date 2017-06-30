@@ -66,9 +66,21 @@ def load_calib_file(filename):
 
 @pyqtSlot(object, int)
 def robot_finished_triggered(gui, status):
-    if status != 0:
+    if status == 0:
+        gui.msgErrorWarning.setText("Calibration successful! Data was written to specified filepath.")
+        gui.msgErrorWarning.setWindowTitle("Calibration successful")
+        gui.msgErrorWarning.exec_()
+    elif status == 1:
         gui.msgErrorWarning.setText("Calibration was interrupted! Please try to calibrate again.")
         gui.msgErrorWarning.setWindowTitle("Calibration interrupted")
+        gui.msgErrorWarning.exec_()
+    elif status == 2:
+        gui.msgErrorWarning.setText("Exercise was completed successfully!")
+        gui.msgErrorWarning.setWindowTitle("Exercise successful")
+        gui.msgErrorWarning.exec_()
+    elif status == 3:
+        gui.msgErrorWarning.setText("Exercise was interrupted! Please try again.")
+        gui.msgErrorWarning.setWindowTitle("Exercise interrupted")
         gui.msgErrorWarning.exec_()
     gui.enableAllWidgets()
 #------------------------
@@ -149,9 +161,9 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self._exercise_init_pub = rospy.Publisher("exercise_init", ExerciseInit, queue_size=1)
         self._exercise_stop_pub = rospy.Publisher("exercise_stop", Bool, queue_size=1)
         self._calibration_request_pub = rospy.Publisher("calibration_request", CalibrationRequest, queue_size=1)
-        rospy.Subscriber("calibration_reply", CalibrationReply, self._calibration_reply_callback)
+        rospy.Subscriber("server_reply", ServerReply, self._server_reply_callback)
 
-    # initialize some other necessary variables
+	# initialize some other necessary variables
         self._is_calibrating = False
         
         # connect functions to widgets
@@ -342,12 +354,12 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         msg.rotation_type = 0
         msg.emotional_feedback_list = []
         if self.tblEmotionalFeedback.rowCount() > 0:
-            for i in range(0,self.tblEmotionalFeedback.columnCount()-1):
+            for i in range(0,self.tblEmotionalFeedback.columnCount()-2):
                 print i
                 emotional_feedback = EmotionalFeedback()
                 emotional_feedback.is_fixed_feedback = (str(self.tblEmotionalFeedback.item(i, 0).text()) == "fixed")
                 emotional_feedback.repetitions = int(self.tblEmotionalFeedback.item(i, 1).text())
-                emotional_feedback.face_to_show = str(self.tblEmotionalFeedback.item(i, 0).text())
+                emotional_feedback.face_to_show = str(self.tblEmotionalFeedback.item(i, 2).text())
                 msg.emotional_feedback_list.append(emotional_feedback)
         # show error dialog if files fail to load
         try:
@@ -524,9 +536,14 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         else:
             event.ignore()
 
-    def _calibration_reply_callback(self, data):
-        # write calibration points to file
+    def _server_reply_callback(self, data):
+	# meaning of status:
+	#	0: calibration reply, success
+	#	1: calibration reply, interrupted/error
+	#	2: exercise reply, success
+	#	3: exercise reply, interrupted/error
         if data.status == 0:
+            # write calibration points to file
             if not self._save_calib_filename.endsWith(".clb"):
                 self._save_calib_filename += ".clb"
             calib_fileptr = open(self._save_calib_filename, "w")
