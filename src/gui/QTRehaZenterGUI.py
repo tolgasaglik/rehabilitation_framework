@@ -17,8 +17,7 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0,parentdir)
 from PyQt4 import uic
-import Exercises
-from Exercises import Limb,RotationType,MotionType,RobotPosition
+#from Exercises import Limb,RotationType,MotionType,RobotPosition
 from rehabilitation_framework.msg import *
 from std_msgs.msg import Bool
 import DefineNewColor
@@ -153,7 +152,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         rospy.Subscriber("calibration_reply", CalibrationReply, self._calibration_reply_callback)
 
     # initialize some other necessary variables
-        self._calibrate_only = False
+        self._is_calibrating = False
         
         # connect functions to widgets
         self.btnInternalRotationExercise.clicked.connect(self.btnInternalRotationExerciseClicked)
@@ -311,7 +310,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             self.msgErrorWarning.setWindowTitle("No calibration file selected")
             self.msgErrorWarning.exec_()
             return
-        self._calibrate_only = False
+        self._is_calibrating = False
         self.txtViewLogOutput.appendPlainText("******************** BEGIN EXERCISE ********************")
         msg = ExerciseInit()
         if not self.btnFlexionMotionExercise.isEnabled():
@@ -333,12 +332,10 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         else:
             msg.quantitative_frequency = 0
         if self.chkQualitative.isChecked():
-            if self.cmbQualiEnc.text() == "high":
+            if self.cmbQualiEnc.currentText() == "high":
                 msg.qualitative_frequency = 3
-            elif self.cmbQualiEnc.text() == "medium":
-                msg.qualitative_frequency = 2
             else:
-                msg.qualitative_frequency = 1
+                msg.qualitative_frequency = 6
         else:
             msg.qualitative_frequency = 0
         msg.robot_position = self.cmbRobotPosition.currentIndex()
@@ -382,14 +379,18 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self._exercise_init_pub.publish(msg)
         self.txtViewLogOutput.appendPlainText("Current exercise configuration:\n" + str(msg))
         self.disableAllWidgets()
+        self._is_calibrating = False
 
     def btnStopClicked(self):
         # stop exercise on robot
-        self._exercise_stop_pub.publish(self._calibrate_only)
+        self._exercise_stop_pub.publish(self._is_calibrating)
 
         # enable all other buttons again
         self.enableAllWidgets()
-        self.txtViewLogOutput.appendPlainText("********************* END EXERCISE *********************")
+        if self._is_calibrating:
+            self.txtViewLogOutput.appendPlainText("******************** END CALIBRATION *******************")
+        else:
+            self.txtViewLogOutput.appendPlainText("********************* END EXERCISE *********************")
 
     def chkQuantitativeClicked(self):
         self.spnQuantEncRep.setEnabled(self.chkQuantitative.isChecked())
@@ -435,7 +436,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             return
         if self.dlgSaveCalibFile.exec_():
         # create calibration service request message
-            self._calibration_only = True
+            self._is_calibrating = True
             request = CalibrationRequest()
             if str(self.cmbCreateCalibFileFor.currentText()) == "flexion exercise":
                 request.motion_type = 1
@@ -469,6 +470,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             self.disableAllWidgets()
             self.tabWidget.setCurrentIndex(1)
             self._calibration_request_pub.publish(request)
+            self.txtViewLogOutput.appendPlainText("******************* BEGIN CALIBRATION ******************")
             self.txtViewLogOutput.appendPlainText("Current calibration configuration:\n" + str(request))
 
     def tblEmotionalFeedbackItemClicked(self):

@@ -251,7 +251,7 @@ class EncouragerUnit(object):
         self._face_pub = rospy.Publisher('/qt_face/setEmotion', String, queue_size=1)
         self.load_sentences()
         self._repetitions_limit = repetitions_limit
-	self._repetitions_counter = 0
+    self._repetitions_counter = 0
         self._emotional_feedbacks = emotional_feedbacks
         self._quantitative_frequency = quantitative_frequency
         self._qualitative_frequency = qualitative_frequency
@@ -274,8 +274,6 @@ class EncouragerUnit(object):
         self._roscore_node = Popen(['roscore'], stdout=None, stderr=None)
         sleep(0.5)
         print "Launched roscore."
-        #self.soundplay_node = Popen(['rosrun', 'sound_play', 'soundplay_node.py'], stdout=None, stderr=None)
-        #self.wm_voice_generator_node = Popen(['rosrun', 'wm_voice_generator', 'wm_voice_component_short.py'], stdout=None, stderr=None)
         soundplay = roslaunch.core.Node("sound_play", "soundplay_node.py")
         wm_voice_generator = roslaunch.core.Node("wm_voice_generator", "wm_voice_component_short.py")
         launch = roslaunch.scriptapi.ROSLaunch()
@@ -300,23 +298,23 @@ class EncouragerUnit(object):
 
     def inc_repetitions_counter(self):
         self._repetitions_counter += 1
-        print "Current number of repetitions done: " +str(self._repetitions_counter)
 
         # process emotional feedbacks (= show an emotion on the QT robot face)
         for efb in self._emotional_feedbacks:
             # is feedback fixed? (yes/no)
             if efb[0] == True and self._repetitions_counter == efb[1]:
-                self._pub_face.publish(efb[2])
+                self._face_pub.publish(efb[2])
             elif efb[0] == False and self._repetitions_counter % efb[1] == 0 and self._repetitions_counter > 0:
                 self._face_pub.publish(efb[2])
 
         # process quantitative feedback (= tell patient how many repetitions he has done so far)
         if self._quantitative_frequency > 0 and self._repetitions_counter in range(0,self._repetitions_limit-1) and self._repetitions_counter % self._quantitative_frequency == 0:
             self._voice_pub.publish(str(self._repetitions_counter))
+            print "Current number of repetitions done: " + str(self._repetitions_counter)
 
         # process qualitative feedback (= tell patient some randomly chosen motivational sentence)
         if self._qualitative_frequency > 0 and self._repetitions_counter in range(0,self._repetitions_limit-1) and self._repetitions_counter % self._qualitative_frequency == 0:
-            self._pub.publish(self._sentences[random.randint(0,len(self._sentences))])
+            self._voice_pub.publish(self._sentences[random.randint(0,len(self._sentences)-1)])
 
     def say(self, sentence):
         self._voice_pub.publish(sentence)
@@ -515,7 +513,6 @@ class Exercise:
         # Main loop
         index=0
         current_block=1
-	print self._number_of_blocks
         self._encourager.say("You may begin your exercise now!")
         #timer = None
         if self.time_limit > 0:
@@ -748,7 +745,7 @@ class SimpleMotionExercise(Exercise):
                 calib_output_file.write("calibration_points_right_arm=" + str(self._calibration_points_right_arm)+ "\n")
         else:
             self._encourager.say("Calibration interrupted!")
-	sleep(2)
+    sleep(2)
 
 
 

@@ -36,6 +36,7 @@ class RosServer(object):
             rosparam.set_param_raw(self._NODE_NAME + "/camera_width", data.camera_width)
             rosparam.set_param_raw(self._NODE_NAME + "/camera_height", data.camera_height)
             rosparam.set_param_raw(self._NODE_NAME + "/robot_position", data.robot_position)
+            rosparam.set_param_raw(self._NODE_NAME + "/number_of_blocks", data.blocks)
 
             # create array of tuples from color data of ROS message
             rgb_colors = []
@@ -74,13 +75,13 @@ class RosServer(object):
             eval_str = "["
             for ef in data.emotional_feedback_list:
                 eval_str += "(" + str(ef.is_fixed_feedback) + "," + str(ef.repetitions) + "," + str(ef.face_to_show) + "),"
-	    print str(eval_str)
-	    # check if emotional feedback list is empty
-	    if eval_str == "[":
-	        emotional_feedback_list = [] 
-	    else:
+
+            # check if emotional feedback list is empty
+            if eval_str == "[":
+                emotional_feedback_list = [] 
+            else:
                 emotional_feedback_list = ast.literal_eval(eval_str[:-1] + "]")
-            rosparam.set_param_raw(self._NODE_NAME + "/emotional_feedback_list", data.emotional_feedback_list)
+                rosparam.set_param_raw(self._NODE_NAME + "/emotional_feedback_list", data.emotional_feedback_list)
 
             # launch exercise instance as process
             launch_params = ['roslaunch', 'rehabilitation_framework', 'Exercise_Launcher.launch']
