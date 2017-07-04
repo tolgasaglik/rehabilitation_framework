@@ -115,6 +115,7 @@ class VideoReader(Thread):
 
 
     def exit_gracefully(self, signum, frame):
+	print "Captured signal, beginning graceful shutdown."
         self.set_kill_thread()
 
     # ****************************** property definitions for the base class ******************************
@@ -125,10 +126,6 @@ class VideoReader(Thread):
     @property
     def img_modified(self):
         return self._img_modified
-
-    @property
-    def center(self):
-        return self._center
 
     @property
     def hsv_thresholds(self):
@@ -226,16 +223,18 @@ class VideoReader(Thread):
             # draw circle arround the detected object and write number of repetitions done on frame
             if self._center != None:
                 self._last_valid_center = self._center
-                cv2.circle(self._img_original, self._center, int(round(self._radius)), np.array([0,255,0]))
+                cv2.circle(self._img_original, self._last_valid_center, int(round(self._radius)), np.array([0,255,0]))
 
             # draw calibration point bounding boxes on original image, if given
-            #if len(self._current_calibration_points) > 0:
-            #    for i,point in enumerate(self._current_calibration_points):
-            #        if i == self._current_calibration_point_index:
-            #            color = np.array([255,255,0])
-            #        else:
-            #            color = np.array([0,0,255])
-            #        cv2.rectangle(self._img_original, (point[0]+self._tolerance_x,point[1]+self._tolerance_y), (point[0]-self._tolerance_x,point[1]-self._tolerance_y), color, -1)
+            if len(self._current_calibration_points) > 0:
+                img_alpha_overlay = self._img_original.copy()
+                for i,point in enumerate(self._current_calibration_points):
+                    if i == self._current_calibration_point_index:
+                        color = np.array([0,255,0])
+                    else:
+                        color = np.array([0,0,255])
+                    cv2.rectangle(img_alpha_overlay, (point[0]+self._tolerance_x,point[1]+self._tolerance_y), (point[0]-self._tolerance_x,point[1]-self._tolerance_y), color, -1)
+                cv2.addWeighted(img_alpha_overlay, 0.3, self._img_original, 0.7, 0, self._img_original)
             
             # publish images to ROS topics
             img_original_msg = bridge.cv2_to_imgmsg(self._img_original, encoding="bgr8")
@@ -244,24 +243,20 @@ class VideoReader(Thread):
             self._img_mod_pub.publish(img_modified_msg)
             self._rate.sleep()
 
-        # returns the latest frame that was retrieve by the capture device
-        def get_next_frame(self):
-            if hasattr(self, "_frame"):
-                return self._frame
+    # returns the latest frame that was retrieve by the capture device
+    def get_next_frame(self):
+        if hasattr(self, "_frame"):
+            return self._frame
 
-        def update_calib_point_index(self):
-            self._current_calibration_point_index = (self._current_calibration_point_index+1) % len(self._current_calibration_points)
+    def update_calib_point_index(self):
+        self._current_calibration_point_index = (self._current_calibration_point_index+1) % len(self._current_calibration_points)
 
-        def update_calib_points(self, new_calibration_points):
-            self._current_calibration_points = new_calibration_points
-            self._current_calibration_point_index = 0
+    def update_calib_points(self, new_calibration_points):
+        self._current_calibration_points = new_calibration_points
+        self._current_calibration_point_index = 0
 
 class EncouragerUnit(object):
     ENC_SENT_FILELOC = "/config/encouragement_sentences.txt"
-
-    @property
-    def repetitions(self):
-        return self._repetitions_counter
 
     @property
     def repetitions_limit(self):
@@ -337,18 +332,18 @@ class EncouragerUnit(object):
         # process emotional feedbacks (= show an emotion on the QT robot face)
         for efb in self._emotional_feedback_list:
             # is feedback fixed? (yes/no)
-            if efb[0] == True and self._repetitions_counter == efb[1]:
+            if efb[0] == True and self._repetitions_arr[index] == efb[1]:
                 self._face_pub.publish(efb[2])
-            elif efb[0] == False and self._repetitions_counter % efb[1] == 0 and self._repetitions_counter > 0:
+            elif efb[0] == False and self._repetitions_arr[index] % efb[1] == 0 and self._repetitions_arr[index] > 0:
                 self._face_pub.publish(efb[2])
 
         # process quantitative feedback (= tell patient how many repetitions he has done so far)
-        if self._quantitative_frequency > 0 and self._repetitions_counter in range(0,self._repetitions_limit-1) and self._repetitions_counter % self._quantitative_frequency == 0:
-            self._voice_pub.publish(str(self._repetitions_counter))
-            print "Current number of repetitions done: " + str(self._repetitions_counter)
+        if self._quantitative_frequency > 0 and self._repetitions_arr[index] in range(0,self._repetitions_limit-1) and self._repetitions_arr[index] % self._quantitative_frequency == 0:
+            self._voice_pub.publish(str(self._repetitions_arr[index]))
+            print "Current number of repetitions done: " + str(self._repetitions_arr[index])
 
         # process qualitative feedback (= tell patient some randomly chosen motivational sentence)
-        if self._qualitative_frequency > 0 and self._repetitions_counter in range(0,self._repetitions_limit-1) and self._repetitions_counter % self._qualitative_frequency == 0:
+        if self._qualitative_frequency > 0 and self._repetitions_arr[index] in range(0,self._repetitions_limit-1) and self._repetitions_arr[index] % self._qualitative_frequency == 0:
             self._voice_pub.publish(self._sentences[random.randint(0,len(self._sentences)-1)])
 
     def say(self, sentence):
@@ -542,53 +537,63 @@ class Exercise:
             raise Exception("Device was not calibrated!")
 
         print "Camera dimensions: " +  str(cv2.CAP_PROP_FRAME_WIDTH) + " x " + str(cv2.CAP_PROP_FRAME_HEIGHT)
-        print "Tolerance: " + str(self._tolerance_x) + " x " + str(self._tolerance_y) + " pixels"
+        print "Tolerance values: " + str(self._tolerance_x) + " x " + str(self._tolerance_y) + " pixels"
 
         # Main loop
         index=0
         current_block=1
         current_block_frame_counter = 0
-        time_arr = [0.0] * self._number_of_blocks
-        accuracy_arr = [0.0] * self._number_of_blocks
+        total_frame_counter = 0
+        time_arr = []
+	for i in range(0,self._number_of_blocks):
+            temp = [0.0] * self._encourager.repetitions_limit
+            time_arr.append(temp)
+        trajectory_smoothness_arr = [0.0] * self._number_of_blocks
         reset_start_time_flag = True
-        start_time = 0.0
-        last_repetition_time = 0.0
+        last_repetition_time = time()
         end_time = 0.0
         # sleep for 2 seconds in order to wait for soundplay and video reader to be ready
         sleep(2)
         self._encourager.say("You may begin your exercise now!")
         #timer = None
         while current_block <= self._number_of_blocks or self.time_limit > 0 and timer.is_alive():
+            total_frame_counter += 1
             if self.time_limit > 0:
                 timer = Timer(self.time_limit)
                 timer.start()
-            if reset_start_time_flag:
-                start_time = time()
-                reset_start_time_flag = False
-            # check if hand movement thresholds have been reached and count repetitions accordingly
-            if self._video_reader.center != None :
+
+            # check if last valid detected object coordinates 
+            last_center = self._video_reader.last_valid_center
+            if self._video_reader.last_valid_center != None :
                 # here, we check if the detected object is within the line connecting the current calibration points pair (up to some threshold)
                 if self._limb == Limb.LEFT_ARM:
-                    x_check = (self._video_reader.center[0] - (self._calibration_points_left_arm[index])[0]) / ((self._calibration_points_left_arm[(index+1) % len(self._calibration_points_left_arm)])[0] - (self._calibration_points_left_arm[index])[0])
-                    y_check = (self._video_reader.center[1] - (self._calibration_points_left_arm[index])[1]) / ((self._calibration_points_left_arm[(index+1) % len(self._calibration_points_left_arm)])[1] - (self._calibration_points_left_arm[index])[1])
-                    if abs(x_check-y_check) < self._tolerance_x and abs(x_check-y_check) < self._tolerance_y:
+                    x_check = (last_center[0] - (self._calibration_points_left_arm[index])[0]) / ((self._calibration_points_left_arm[(index+1) % len(self._calibration_points_left_arm)])[0] - (self._calibration_points_left_arm[index])[0])
+                    y_check = (last_center[1] - (self._calibration_points_left_arm[index])[1]) / ((self._calibration_points_left_arm[(index+1) % len(self._calibration_points_left_arm)])[1] - (self._calibration_points_left_arm[index])[1])
+                    if abs(x_check) < 3 and abs(y_check) < 3:
                         current_block_frame_counter += 1
                 else:
-                    x_check = (self._video_reader.center[0] - (self._calibration_points_right_arm[index])[0]) / ((self._calibration_points_right_arm[(index+1) % len(self._calibration_points_right_arm)])[0] - (self._calibration_points_right_arm[index])[0])
-                    y_check = (self._video_reader.center[1] - (self._calibration_points_right_arm[index])[1]) / ((self._calibration_points_right_arm[(index+1) % len(self._calibration_points_right_arm)])[1] - (self._calibration_points_right_arm[index])[1])
+                    x_check = (last_center[0] - (self._calibration_points_right_arm[index])[0]) / ((self._calibration_points_right_arm[(index+1) % len(self._calibration_points_right_arm)])[0] - (self._calibration_points_right_arm[index])[0])
+                    y_check = (last_center[1] - (self._calibration_points_right_arm[index])[1]) / ((self._calibration_points_right_arm[(index+1) % len(self._calibration_points_right_arm)])[1] - (self._calibration_points_right_arm[index])[1])
                     if abs(x_check-y_check) < self._tolerance_x and abs(x_check-y_check) < self._tolerance_y:
                         current_block_frame_counter += 1
 
                 # check if the next calibration point has been reached
-                if (self._limb == Limb.LEFT_ARM and abs(self._video_reader.center[0]-(self._calibration_points_left_arm[index])[0]) < self._tolerance_x and abs(self._video_reader.center[1]-(self._calibration_points_left_arm[index])[1]) < self._tolerance_y) or (self._limb == Limb.RIGHT_ARM and abs(self._video_reader.center[0]-(self._calibration_points_right_arm[index])[0]) < self._tolerance_x and abs(self._video_reader.center[1]-(self._calibration_points_right_arm[index])[1]) < self._tolerance_y):
+                if (self._limb == Limb.LEFT_ARM and abs(last_center[0]-(self._calibration_points_left_arm[index])[0]) < self._tolerance_x and abs(last_center[1]-(self._calibration_points_left_arm[index])[1]) < self._tolerance_y) or (self._limb == Limb.RIGHT_ARM and abs(last_center[0]-(self._calibration_points_right_arm[index])[0]) < self._tolerance_x and abs(last_center[1]-(self._calibration_points_right_arm[index])[1]) < self._tolerance_y):
+                    current_time = time()
+                    time_arr[current_block-1][self._encourager.repetitions_arr[current_block-1]] = current_time - last_repetition_time
+                    last_repetition_time = current_time
                     index += 1
+                    self._video_reader.update_calib_point_index()
                     # check if all calibration points have been reached, if yes then increase repetitions counter
                     # NOTE: both point arrays have the same number of elements, so it doesn't matter which array size we take for the condition below
                     if index == len(self._calibration_points_left_arm):
                         index = 0
                         self._encourager.inc_repetitions_counter(current_block-1)
                         # check if all repetition points have been reached and increase corresponding repetitions counter in array
-                        if self._encourager.repetitions == self._encourager.repetitions_limit:
+                        if self._encourager.repetitions_arr[current_block-1] == self._encourager.repetitions_limit:
+                            trajectory_smoothness_arr[current_block-1] = (current_block_frame_counter*1.0) / (total_frame_counter*1.0)
+                            current_block_frame_counter = 0
+                            total_frame_counter = 0
                             self._encourager.say("Block " + str(current_block) + " finished!")
                             self._encourager.say("You did " + str(self._encourager.repetitions_arr[current_block-1]) + " repetitions in this block.")
                             sleep(2)
@@ -609,12 +614,9 @@ class Exercise:
                             else:
                                 break
                             current_block += 1
-                            end_time = time()
-                            time_arr[current_block-1] = end_time - start_time
-                            reset_start_time_flag = True
                             
             # check termination conditions
-            if self.time_limit > 0 and not timer.is_alive():
+            if self.time_limit > 0 and not timer.is_alive() or not self._video_reader.is_alive():
                 break
 
         # kill video reader and timer threads
@@ -633,9 +635,11 @@ class Exercise:
             print "Timer thread terminated!"
 
         # store repetitions and time results
-        with open(results_file, "w") as res_output_file:
-            res_output_file.write("repetitions_results=" + str(self._encourager.repetitions_arr)+ "\n")
-            res_output_file.write("time_results=" + str(time_arr)+ "\n")
+        if results_output_file != "":
+	    with open(results_output_file, "w") as res_output_file:
+                res_output_file.write("repetitions_results=" + str(self._encourager.repetitions_arr)+ "\n")
+                res_output_file.write("time_results=" + str(time_arr)+ "\n")
+                res_output_file.write("trajectory_smoothness=" + str(trajectory_smoothness_arr)+ "\n")
 
     def stop_game(self):
         if self._encourager.spawn_ros_nodes:
@@ -738,7 +742,8 @@ class SimpleMotionExercise(Exercise):
                 encourager_guide_flag = True
 
             # if no object was found in the video capture for some time, wait for object to reappear
-            if self._video_reader.center != None:
+            last_center = self._video_reader.center
+            if last_center != None:
                 if no_center_found_counter > 0:
                     no_center_found_counter = 0
                     if no_center_found_flag:
@@ -750,27 +755,27 @@ class SimpleMotionExercise(Exercise):
                     # check if any of the recorded points are too close to each other before inserting
                     if self._limb == Limb.LEFT_ARM: 
                         # check if calibration point is valid for the left arm
-                        if len(self._calibration_points_left_arm) > 0 and ((self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.ABDUCTION or self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.FLEXION) and (abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[1]-self._video_reader.center[1]) < self._tolerance_y) \
-                        or ((self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.ABDUCTION or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.FLEXION or self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.FLEXION) and ((abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[0]-self._video_reader.center[0]) < self._tolerance_x) and (abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[1]-self._video_reader.center[1]) < self._tolerance_y-(self._tolerance_y/2))) \
-                        or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.ABDUCTION and (abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[0]-self._video_reader.center[0]) < self._tolerance_x))):
+                        if len(self._calibration_points_left_arm) > 0 and ((self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.ABDUCTION or self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.FLEXION) and (abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[1]-last_center[1]) < self._tolerance_y) \
+                        or ((self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.ABDUCTION or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.FLEXION or self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.FLEXION) and ((abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[0]-last_center[0]) < self._tolerance_x) and (abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[1]-last_center[1]) < self._tolerance_y-(self._tolerance_y/2))) \
+                        or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.ABDUCTION and (abs((self._calibration_points_left_arm[len(self._calibration_points_left_arm)-1])[0]-last_center[0]) < self._tolerance_x))):
                             self._encourager.say("The calibration points are too close to each other, please try again.")
                             self._calibration_points_left_arm = []
                         elif no_center_found_counter == 0:
                             # take last valid centroid that was found by video reader and store coordinates
-                            self._calibration_points_left_arm.append(self._video_reader.last_valid_center)
+                            self._calibration_points_left_arm.append(last_center)
                             # switch to right arm when all points for the left arm have been calibrated
                             if len(self._calibration_points_left_arm) == number_of_calibration_points:
                                 self.limb = Limb.RIGHT_ARM
                     else:
                         # else, check if calibration point is valid for the right arm
-                        if len(self._calibration_points_right_arm) > 0 and (self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.ABDUCTION and (abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[0]-self._video_reader.center[0]) < self._tolerance_x) \
-                        or ((self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.FLEXION or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.ABDUCTION) and (abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[1]-self._video_reader.center[1]) < self._tolerance_y)) \
-                        or ((self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.ABDUCTION or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.FLEXION or self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.FLEXION) and ((abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[0]-self._video_reader.center[0]) < self._tolerance_x) or (abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[1]-self._video_reader.center[1]) < self._tolerance_y-(self._tolerance_y/2))))):
+                        if len(self._calibration_points_right_arm) > 0 and (self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.ABDUCTION and (abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[0]-last_center[0]) < self._tolerance_x) \
+                        or ((self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.FLEXION or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.ABDUCTION) and (abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[1]-last_center[1]) < self._tolerance_y)) \
+                        or ((self.robot_position == RobotPosition.CENTER and self.motion_type == MotionType.ABDUCTION or self.robot_position == RobotPosition.RIGHT and self.motion_type == MotionType.FLEXION or self.robot_position == RobotPosition.LEFT and self.motion_type == MotionType.FLEXION) and ((abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[0]-last_center[0]) < self._tolerance_x) or (abs((self._calibration_points_right_arm[len(self._calibration_points_right_arm)-1])[1]-last_center[1]) < self._tolerance_y-(self._tolerance_y/2))))):
                             self._encourager.say("The calibration points are too close to each other, please try again.")
                             self._calibration_points_right_arm = []
                         elif no_center_found_counter == 0:
                             # take last valid centroid that was found by video reader and store coordinates
-                            self._calibration_points_right_arm.append(self._video_reader.last_valid_center)
+                            self._calibration_points_right_arm.append(last_center)
                     timer = None
             elif no_center_found_counter < NO_CENTER_FOUND_MAX:
                 no_center_found_counter += 1
