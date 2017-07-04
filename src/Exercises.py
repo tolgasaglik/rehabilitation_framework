@@ -4,7 +4,7 @@ from abc import ABCMeta, abstractmethod
 import cv2
 import signal
 import numpy as np
-import sys
+import sys, traceback
 import argparse
 import roslib; roslib.load_manifest('rehabilitation_framework')
 import ast
@@ -543,7 +543,6 @@ class Exercise:
 
         print "Camera dimensions: " +  str(cv2.CAP_PROP_FRAME_WIDTH) + " x " + str(cv2.CAP_PROP_FRAME_HEIGHT)
         print "Tolerance: " + str(self._tolerance_x) + " x " + str(self._tolerance_y) + " pixels"
-        print "Press the \"q\" key to quit."
 
         # Main loop
         index=0
@@ -553,6 +552,7 @@ class Exercise:
         accuracy_arr = [0.0] * self._number_of_blocks
         reset_start_time_flag = True
         start_time = 0.0
+        last_repetition_time = 0.0
         end_time = 0.0
         # sleep for 2 seconds in order to wait for soundplay and video reader to be ready
         sleep(2)
@@ -582,6 +582,7 @@ class Exercise:
                 # check if the next calibration point has been reached
                 if (self._limb == Limb.LEFT_ARM and abs(self._video_reader.center[0]-(self._calibration_points_left_arm[index])[0]) < self._tolerance_x and abs(self._video_reader.center[1]-(self._calibration_points_left_arm[index])[1]) < self._tolerance_y) or (self._limb == Limb.RIGHT_ARM and abs(self._video_reader.center[0]-(self._calibration_points_right_arm[index])[0]) < self._tolerance_x and abs(self._video_reader.center[1]-(self._calibration_points_right_arm[index])[1]) < self._tolerance_y):
                     index += 1
+                    # check if all calibration points have been reached, if yes then increase repetitions counter
                     # NOTE: both point arrays have the same number of elements, so it doesn't matter which array size we take for the condition below
                     if index == len(self._calibration_points_left_arm):
                         index = 0
@@ -851,5 +852,6 @@ if __name__ == '__main__':
         exercise.stop_game()
     except Exception as e:
         print("An error occured when launching the exercise!\n" + str(e))
+        traceback.print_exc(file=sys.stdout)
         sys.exit(4)
     sys.exit(0)

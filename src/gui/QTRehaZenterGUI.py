@@ -11,6 +11,7 @@ from PyQt4.QtCore import QThread, QRectF, Qt, pyqtSignal, pyqtSlot
 from PyQt4.QtGui import QMessageBox, QFileDialog, QWidget, QTabWidget, QLabel, QImage, QPixmap, QGraphicsScene, QGraphicsPixmapItem, QHeaderView, QTableWidgetItem
 import os,sys,inspect,ast
 import rospy
+import cv2
 # include parent "src" directory to sys.path, otherwise import won't work
 # (source: http://stackoverflow.com/questions/714063/importing-modules-from-parent-folder)
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -618,8 +619,10 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 
     def _detected_blobs_callback(self, data):
         cv_image = self._bridge.imgmsg_to_cv2(data, desired_encoding="mono8")
-        height, width = cv_image.shape
-        img = QImage(cv_image, width, height, QImage.Format_Mono)
+        cv_image = cv2.cvtColor(cv_image, cv2.COLOR_GRAY2RGB)
+        height, width, byte_value = cv_image.shape
+        byte_value = byte_value * width
+        img = QImage(cv_image, width, height, byte_value, QImage.Format_RGB888)
         self.detected_blobs_received.emit(self, img)
 
         
