@@ -20,7 +20,9 @@ from PyQt4 import uic
 #from Exercises import Limb,RotationType,MotionType,RobotPosition
 from rehabilitation_framework.msg import *
 from std_msgs.msg import Bool
+from sensor_msgs.msg import Image
 import DefineNewColor
+from cv_bridge import CvBridge
 
 # some helper functions
 def load_color_file(filename):
@@ -66,6 +68,11 @@ def load_calib_file(filename):
 
 @pyqtSlot(object, int)
 def robot_finished_triggered(gui, status):
+    # meaning of status:
+    #	0: calibration reply, success
+    #	1: calibration reply, interrupted/error
+    #	2: exercise reply, success
+    #	3: exercise reply, interrupted/error
     if status == 0:
         gui.msgErrorWarning.setText("Calibration successful! Data was written to specified filepath.")
         gui.msgErrorWarning.setWindowTitle("Calibration successful")
@@ -83,10 +90,27 @@ def robot_finished_triggered(gui, status):
         gui.msgErrorWarning.setWindowTitle("Exercise interrupted")
         gui.msgErrorWarning.exec_()
     gui.enableAllWidgets()
+
+@pyqtSlot(object, QImage)
+def original_img_received_triggered(gui, img):
+    scene = QGraphicsScene()
+    pixmap = QGraphicsPixmapItem(QPixmap(img), None, scene)
+    gui.grOriginalImage.setScene(scene)
+    gui.grOriginalImage.fitInView(scene.sceneRect(), Qt.KeepAspectRatio)
+    
+    
+@pyqtSlot(object, QImage)
+def detected_blobs_received_triggered(gui, img):
+    scene = QGraphicsScene()
+    pixmap = QGraphicsPixmapItem(QPixmap(img), None, scene)
+    gui.grDetectedObjects.setScene(scene)
+    gui.grDetectedObjects.fitInView(scene.sceneRect(), Qt.KeepAspectRatio)
 #------------------------
 
 class QTRehaZenterGUI(QtGui.QMainWindow):
     robot_finished = pyqtSignal(object, int, name="robot_finished")
+    original_img_received = pyqtSignal(object, QImage, name="original_img")
+    detected_blobs_received = pyqtSignal(object, QImage, name="detected_blobs")
     _save_calib_filename = ""
     def __init__(self):
         super(QTRehaZenterGUI, self).__init__()
@@ -94,6 +118,9 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         
         # initialize custom object loader widget
         self.defineNewColorWidget = DefineNewColor.UIDefineNewColorWidget(self)
+
+        # disable camera feed tab on startup (enabled later)
+        self.tabWidget.setTabEnabled(2, False)
         
         # load logo images
         uniLuLogoScene = QGraphicsScene()
@@ -158,13 +185,17 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         
         # initialize ROS publisher topics
         rospy.init_node("reha_interface", anonymous=True)
-        self._exercise_init_pub = rospy.Publisher("exercise_init", ExerciseInit, queue_size=1)
+        self._exercise_request_pub = rospy.Publisher("exercise_request", ExerciseRequest, queue_size=1)
         self._exercise_stop_pub = rospy.Publisher("exercise_stop", Bool, queue_size=1)
         self._calibration_request_pub = rospy.Publisher("calibration_request", CalibrationRequest, queue_size=1)
-        rospy.Subscriber("server_reply", ServerReply, self._server_reply_callback)
+        rospy.Subscriber("exercise_reply", ExerciseReply, self._server_reply_callback)
+        rospy.Subscriber("calibration_reply", CalibrationReply, self._server_reply_callback)
+        rospy.Subscriber("/webcam/original_img", Image, self._original_img_callback)
+        rospy.Subscriber("/webcam/detected_blobs", Image, self._detected_blobs_callback)
 
-	# initialize some other necessary variables
+	    # initialize some other necessary variables
         self._is_calibrating = False
+        self._bridge = CvBridge()
         
         # connect functions to widgets
         self.btnInternalRotationExercise.clicked.connect(self.btnInternalRotationExerciseClicked)
@@ -188,6 +219,8 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.btnLoadCalibFile.clicked.connect(self.btnLoadCalibFileClicked)
         self.btnCalibrateNow.clicked.connect(self.btnCalibrateNowClicked)
         self.robot_finished.connect(robot_finished_triggered)
+        self.original_img_received.connect(original_img_received_triggered)
+        self.detected_blobs_received.connect(detected_blobs_received_triggered)
     
     # **** some helper functions specific to the class ****
     def disableAllWidgets(self):
@@ -221,6 +254,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.btnLoadCalibFile.setEnabled(False)
         self.cmbCreateCalibFileFor.setEnabled(False)
         self.btnCalibrateNow.setEnabled(False)
+        self.tabWidget.setTabEnabled(2, True)
 
     def enableAllWidgets(self):
         # disable all other buttons while the chosen exercise is running
@@ -262,6 +296,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             self.btnCalibrateNow.setEnabled(False)
         self.lblPerRepetitions1.setEnabled(False)
         self.lblPerRepetitions2.setEnabled(False)
+        self.tabWidget.setTabEnabled(2, False)
     
     # *******************************************************************************************
     # *************************  connector functions for the UI buttons  ************************
@@ -324,7 +359,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             return
         self._is_calibrating = False
         self.txtViewLogOutput.appendPlainText("******************** BEGIN EXERCISE ********************")
-        msg = ExerciseInit()
+        msg = ExerciseRequest()
         if not self.btnFlexionMotionExercise.isEnabled():
             msg.motion_type = 1
             msg.rotation_type = 0
@@ -388,7 +423,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             return
         msg.calibration_points_left_arm = calib_data[0]
         msg.calibration_points_right_arm = calib_data[1]
-        self._exercise_init_pub.publish(msg)
+        self._exercise_request_pub.publish(msg)
         self.txtViewLogOutput.appendPlainText("Current exercise configuration:\n" + str(msg))
         self.disableAllWidgets()
         self._is_calibrating = False
@@ -403,6 +438,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             self.txtViewLogOutput.appendPlainText("******************** END CALIBRATION *******************")
         else:
             self.txtViewLogOutput.appendPlainText("********************* END EXERCISE *********************")
+        self.tabWidget.setTabEnabled(2, False)
 
     def chkQuantitativeClicked(self):
         self.spnQuantEncRep.setEnabled(self.chkQuantitative.isChecked())
@@ -537,11 +573,11 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             event.ignore()
 
     def _server_reply_callback(self, data):
-	# meaning of status:
-	#	0: calibration reply, success
-	#	1: calibration reply, interrupted/error
-	#	2: exercise reply, success
-	#	3: exercise reply, interrupted/error
+        # meaning of status:
+        #	0: calibration reply, success
+        #	1: calibration reply, interrupted/error
+        #	2: exercise reply, success
+        #	3: exercise reply, interrupted/error
         if data.status == 0:
             # write calibration points to file
             if not self._save_calib_filename.endsWith(".clb"):
@@ -565,8 +601,26 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
                 str_to_write += "(" + str(point.x) + "," + str(point.y) + "),"
             calib_fileptr.write(str_to_write[:-1] + "]\n")
             calib_fileptr.close()
+        elif data.status == 2:
+            #process exercise results message
+            print "Time results: " + str(data.time_results)
+            print "Repetitions results: " + str(data.repetitions_results)
+            print "Accuracy results: " + str(data.exercise_accuracy_results)
         self._is_calibrating = False
         self.robot_finished.emit(self, data.status)
+
+    def _original_img_callback(self, data):
+        cv_image = self._bridge.imgmsg_to_cv2(data, desired_encoding="rgb8")
+        height, width, byte_value = cv_image.shape
+        byte_value = byte_value * width
+        img = QImage(cv_image, width, height, byte_value, QImage.Format_RGB888)
+        self.original_img_received.emit(self, img)
+
+    def _detected_blobs_callback(self, data):
+        cv_image = self._bridge.imgmsg_to_cv2(data, desired_encoding="mono8")
+        height, width = cv_image.shape
+        img = QImage(cv_image, width, height, QImage.Format_Mono)
+        self.detected_blobs_received.emit(self, img)
 
         
 # *******************************************************************************************

@@ -15,16 +15,17 @@ class RosServer(object):
         
         # initialize subscribers and ROS node
         rospy.init_node(self._NODE_NAME, anonymous=True)
-        rospy.Subscriber("exercise_init", ExerciseInit, self._exercise_init_callback)
+        rospy.Subscriber("exercise_request", ExerciseRequest, self._exercise_request_callback)
         rospy.Subscriber("calibration_request", CalibrationRequest, self._calibration_request_callback)
         rospy.Subscriber("exercise_stop", Bool, self._exercise_stop_callback)
-        self._server_reply_pub = rospy.Publisher("server_reply", ServerReply, queue_size=1)
+        self._calibration_reply_pub = rospy.Publisher("calibration_reply", CalibrationReply, queue_size=1)
+        self._exercise_reply_pub = rospy.Publisher("exercise_reply", ExerciseReply, queue_size=1)
 
         # spin() simply keeps python from exiting until this node is stopped
         rospy.loginfo("ROS Server initialized, listening for messages now...")
         rospy.spin()
 
-    def _exercise_init_callback(self, data):
+    def _exercise_request_callback(self, data):
         rospy.loginfo("Received exercise request.")
         rospy.loginfo("Message contents:\n" + str(data))
         if self._exercise_instance != None:
@@ -89,24 +90,29 @@ class RosServer(object):
             self._exercise_instance = Popen(launch_params)
             self._exercise_instance.wait()
 
-	    # check exit code of exercise
-	    server_reply = ServerReply()
-	    if self._exercise_instance.returncode > 0:
-                rospy.loginfo("Exercise process was interrupted!")
-                server_reply.status = 3
-                server_reply.calibration_points_left_arm = []
-                server_reply.calibration_points_right_arm = []
-            else:
+            # check exit code of exercise
+            exercise_reply = ExerciseReply()
+            time_results = []
+            repetitions_results = []
+            if self._exercise_instance.returncode > 0 and os.path.exists("/tmp/temp_results_file.res"):
+                with open("/tmp/temp_results_file.res", "w") as results_output_file:
+                    for line in results_output_file.readlines():
+                        if line.startswith("time_results="):
+                            time_results = ast.literal_eval(line[13:])
+                        elif line.startswith("repetitions_results="):
+                            repetitions_results = ast.literal_eval(line[20:])
                 rospy.loginfo("Exercise process was completed successfully!")
-                server_reply.status = 2
-                server_reply.calibration_points_left_arm = []
-                server_reply.calibration_points_right_arm = []
+                exercise_reply.status = 0
+            else:
+                rospy.loginfo("Exercise process was interrupted!")
+                exercise_reply.status = 1
+            exercise_reply.time_results = time_results
+            exercise_reply.repetitions_results = repetitions_results
 		
             # clean up
-            self._server_reply_pub.publish(server_reply)
+            self._exercise_reply_pub.publish(exercise_reply)
             del self._exercise_instance
-	    self._exercise_instance = None
-		
+            self._exercise_instance = None		
         else:
             rospy.loginfo("Received invalid exercise configuration! Aborting exercise creation.")
 
@@ -144,12 +150,12 @@ class RosServer(object):
             self._exercise_instance.wait()
 
             # retrieve calibration file written by exercise subprocess and send data to GUI client
-            server_reply = ServerReply()
+            calibration_reply = CalibrationReply()
+            left_arm_points = []
+            right_arm_points = []
             if os.path.exists("/tmp/temp_calib_file.clb") and self._exercise_instance.returncode == 0:
                 # retrieve created file and send contents over to GUI
             	rospy.loginfo("Calibration process completed successfully!")
-                left_arm_points = []
-                right_arm_points = []
                 with open("/tmp/temp_calib_file.clb", "r") as temp_calib_file:
                     for line in temp_calib_file:
                         if line.startswith("calibration_points_left_arm="):
@@ -162,18 +168,16 @@ class RosServer(object):
                             for point in temp_list:
                                 new_point = CalibrationPoint(point[0], point[1])
                                 right_arm_points.append(new_point)
-                server_reply.status = 0
-                server_reply.calibration_points_left_arm = left_arm_points
-                server_reply.calibration_points_right_arm = right_arm_points
+                calibration_reply.status = 0
                 os.remove("/tmp/temp_calib_file.clb")
             else:
                 rospy.loginfo("Calibration process was interrupted! Unable to record calibration data...")
-                server_reply.status = 1
-                server_reply.calibration_points_left_arm = []
-                server_reply.calibration_points_right_arm = []
+                calibration_reply.status = 1
+            calibration_reply.calibration_points_left_arm = left_arm_points
+            calibration_reply.calibration_points_right_arm = right_arm_points
 
             # clean up and return service response
-            self._server_reply_pub.publish(server_reply)
+            self._calibration_reply_pub.publish(calibration_reply)
             del self._exercise_instance
             self._exercise_instance = None
 
