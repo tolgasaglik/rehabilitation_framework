@@ -94,6 +94,7 @@ class RosServer(object):
             exercise_reply = ExerciseReply()
             time_results = []
             repetitions_results = []
+            trajectory_smoothness = []
             if self._exercise_instance.returncode > 0 and os.path.exists("/tmp/temp_results_file.res"):
                 with open("/tmp/temp_results_file.res", "w") as results_output_file:
                     for line in results_output_file.readlines():
@@ -101,14 +102,21 @@ class RosServer(object):
                             time_results = ast.literal_eval(line[13:])
                         elif line.startswith("repetitions_results="):
                             repetitions_results = ast.literal_eval(line[20:])
+                        elif line.startswith("trajectory_smoothness="):
+                            trajectory_smoothness = ast.literal_eval(line[22:])
                 rospy.loginfo("Exercise process was completed successfully!")
-                exercise_reply.status = 0
+                exercise_reply.status = 2
             else:
                 rospy.loginfo("Exercise process was interrupted!")
-                exercise_reply.status = 1
+                exercise_reply.status = 3
+            for tres in exercise_reply.time_results:
+                temp = TimeResult()
+                temp.data = tres
+                time_results.append(temp)
             exercise_reply.time_results = time_results
             exercise_reply.repetitions_results = repetitions_results
-		
+            exercise_reply.trajectory_smoothness = trajectory_smoothness
+
             # clean up
             self._exercise_reply_pub.publish(exercise_reply)
             del self._exercise_instance
@@ -190,6 +198,8 @@ class RosServer(object):
                 rospy.loginfo("Received request to finish exercise, cleaning up...")
                 self._exercise_instance.terminate()
                 self._exercise_instance.wait()
+                if os.path.exists("/tmp/temp_results_file.res"):
+                    os.remove("/tmp/temp_results_file.res")
                 rospy.loginfo("Exercise terminated successfully!")
         else:
             if self._exercise_instance == None:
@@ -200,6 +210,7 @@ class RosServer(object):
                 self._exercise_instance.wait()
                 if os.path.exists("/tmp/temp_calib_file.clb"):
                     os.remove("/tmp/temp_calib_file.clb")
+                rospy.loginfo("Calibration process terminated successfully!")
 
 
 if __name__ == "__main__":

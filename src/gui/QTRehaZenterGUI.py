@@ -24,6 +24,7 @@ from std_msgs.msg import Bool
 from sensor_msgs.msg import Image
 import DefineNewColor
 from cv_bridge import CvBridge
+import csv
 
 # some helper functions
 def load_color_file(filename):
@@ -604,6 +605,19 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             calib_fileptr.close()
         elif data.status == 2:
             #process exercise results message
+            with open("./time_results.csv", "w") as csvfile:
+                time_res_writer = csv.writer(csvfile, delimiter="\t")
+                for res in data.time_results:
+                        time_res_writer.writerow(res)
+            with open("./repetitions_results.csv", "w") as csvfile:
+                repetition_res_writer = csv.writer(csvfile, delimiter="\t")
+                for res in data.repetitions_results:
+                        repetition_res_writer.writerow([res])
+            with open("./trajectory_smoothness_results.csv", "w") as csvfile:
+                ts_res_writer = csv.writer(csvfile, delimiter="\t")
+                for res in data.trajectory_smoothness_results:
+                        ts_res_writer.writerow([res])
+            
             print "Time results: " + str(data.time_results)
             print "Repetitions results: " + str(data.repetitions_results)
             print "Accuracy results: " + str(data.exercise_accuracy_results)
