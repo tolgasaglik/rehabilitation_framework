@@ -54,6 +54,7 @@ add_message_files(
    RGBColor.msg
    CalibrationRequest.msg
    CalibrationReply.msg
+   TimeResult.msg
 )
 
 ## Generate services in the 'srv' folder

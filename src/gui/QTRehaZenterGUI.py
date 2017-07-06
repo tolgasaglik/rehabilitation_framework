@@ -608,7 +608,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             with open("./time_results.csv", "w") as csvfile:
                 time_res_writer = csv.writer(csvfile, delimiter="\t")
                 for res in data.time_results:
-                        time_res_writer.writerow(res)
+                        time_res_writer.writerow(res.data)
             with open("./repetitions_results.csv", "w") as csvfile:
                 repetition_res_writer = csv.writer(csvfile, delimiter="\t")
                 for res in data.repetitions_results:

@@ -136,6 +136,10 @@ class VideoReader(Thread):
         return self._last_valid_center
 
     @property
+    def center(self):
+        return self._center
+
+    @property
     def radius(self):
         return self._radius
 
@@ -333,6 +337,7 @@ class EncouragerUnit(object):
         for efb in self._emotional_feedback_list:
             # is feedback fixed? (yes/no)
             if efb[0] == True and self._repetitions_arr[index] == efb[1]:
+                print efb[2]
                 self._face_pub.publish(efb[2])
             elif efb[0] == False and self._repetitions_arr[index] % efb[1] == 0 and self._repetitions_arr[index] > 0:
                 self._face_pub.publish(efb[2])
@@ -419,8 +424,8 @@ class Exercise:
         if rospy.has_param('/reha_exercise/calibration_points_left_arm') and rospy.has_param('/reha_exercise/calibration_points_left_arm'):
             self._calibration_points_left_arm = rosparam.get_param("/reha_exercise/calibration_points_left_arm")
             self._calibration_points_right_arm = rosparam.get_param("/reha_exercise/calibration_points_right_arm")
-        if rospy.has_param('/reha_exercise/emotional_feedbacks'):
-            temp_emotional_feedbacks = rosparam.get_param("/reha_exercise/emotional_feedbacks")
+        if rospy.has_param('/reha_exercise/emotional_feedback_list'):
+            temp_emotional_feedbacks = rosparam.get_param("/reha_exercise/emotional_feedback_list")
 
         # define tolerance values for both axis when calibrating manually
         self._tolerance_x = camera_resolution[0] / 12
@@ -429,6 +434,7 @@ class Exercise:
         self._video_reader = VideoReader(rgb_colors, camera_resolution, self._calibration_points_left_arm, self._tolerance_x, self._tolerance_y)
         self._video_reader.start()
         self._encourager = EncouragerUnit(self._number_of_blocks, self.repetitions_limit, spawnRosNodes=self._spawn_nodes, quantitative_frequency=temp_quant_freq, qualitative_frequency=temp_quali_freq, emotional_feedbacks=temp_emotional_feedbacks)
+        self._rate = rospy.Rate(60) # 60hz
         sleep(0.2)  # wait some miliseconds until the video reader grabs its first frame from the capture device
 
 
@@ -569,12 +575,12 @@ class Exercise:
                 if self._limb == Limb.LEFT_ARM:
                     x_check = (last_center[0] - (self._calibration_points_left_arm[index])[0]) / ((self._calibration_points_left_arm[(index+1) % len(self._calibration_points_left_arm)])[0] - (self._calibration_points_left_arm[index])[0])
                     y_check = (last_center[1] - (self._calibration_points_left_arm[index])[1]) / ((self._calibration_points_left_arm[(index+1) % len(self._calibration_points_left_arm)])[1] - (self._calibration_points_left_arm[index])[1])
-                    if abs(x_check) < 3 and abs(y_check) < 3:
+                    if abs(x_check) < 2 and abs(y_check) < 2:
                         current_block_frame_counter += 1
                 else:
                     x_check = (last_center[0] - (self._calibration_points_right_arm[index])[0]) / ((self._calibration_points_right_arm[(index+1) % len(self._calibration_points_right_arm)])[0] - (self._calibration_points_right_arm[index])[0])
                     y_check = (last_center[1] - (self._calibration_points_right_arm[index])[1]) / ((self._calibration_points_right_arm[(index+1) % len(self._calibration_points_right_arm)])[1] - (self._calibration_points_right_arm[index])[1])
-                    if abs(x_check-y_check) < self._tolerance_x and abs(x_check-y_check) < self._tolerance_y:
+                    if abs(x_check-y_check) < 2 and abs(x_check-y_check) < 2:
                         current_block_frame_counter += 1
 
                 # check if the next calibration point has been reached
@@ -618,6 +624,7 @@ class Exercise:
             # check termination conditions
             if self.time_limit > 0 and not timer.is_alive() or not self._video_reader.is_alive():
                 break
+            self._rate.sleep()
 
         # kill video reader and timer threads
         if self._video_reader.is_alive():
@@ -701,17 +708,20 @@ class SimpleMotionExercise(Exercise):
         self._calibration_points_right_arm = []
 
         # number of frames to wait when no object detected (before warning user)
-        NO_CENTER_FOUND_MAX = 300
+        NO_CENTER_FOUND_MAX = 200
 
         # Main calibration loop
         timer = None
-        encourager_guide_flag = False
+        encourager_guide_flag = True
         no_center_found_counter = 0
         no_center_found_flag = False
         # sleep for 2 seconds in order to wait for soundplay and video reader to be ready
         sleep(2)
         while len(self._calibration_points_right_arm) < number_of_calibration_points:
             # tell encourager to say a sentence, if needed
+            print no_center_found_counter
+            print no_center_found_flag
+            print "-" * 60
             if encourager_guide_flag:
                 if self._limb == Limb.LEFT_ARM:
                     if len(self._calibration_points_left_arm) == 0:
@@ -739,16 +749,18 @@ class SimpleMotionExercise(Exercise):
                 timer = Timer(self.calibration_duration)
                 timer.start()
                 #if (self._limb == Limb.LEFT_ARM and len(self._calibration_points_left_arm) > 0) or (self._limb == Limb.RIGHT_ARM and len(self._calibration_points_right_arm) > 0):
-                encourager_guide_flag = True
+                #encourager_guide_flag = True
+                no_center_found_flag = False 
+		print "timer re-init"
 
             # if no object was found in the video capture for some time, wait for object to reappear
             last_center = self._video_reader.center
             if last_center != None:
                 if no_center_found_counter > 0:
-                    no_center_found_counter = 0
-                    if no_center_found_flag:
-                        self._encourager.say("Okay, I can see your object now!")
+                    no_center_found_counter -= 1
+                    if no_center_found_counter == 0 and no_center_found_flag:
                         no_center_found_flag = False
+                        self._encourager.say("Okay. I can see your object now.")
                         #encourager_guide_flag = True
                 # store coordinates when timer has run out
                 if timer != None and timer.is_alive() == False:
@@ -763,6 +775,7 @@ class SimpleMotionExercise(Exercise):
                         elif no_center_found_counter == 0:
                             # take last valid centroid that was found by video reader and store coordinates
                             self._calibration_points_left_arm.append(last_center)
+                            encourager_guide_flag = True
                             # switch to right arm when all points for the left arm have been calibrated
                             if len(self._calibration_points_left_arm) == number_of_calibration_points:
                                 self.limb = Limb.RIGHT_ARM
@@ -776,14 +789,18 @@ class SimpleMotionExercise(Exercise):
                         elif no_center_found_counter == 0:
                             # take last valid centroid that was found by video reader and store coordinates
                             self._calibration_points_right_arm.append(last_center)
+                            if len(self._calibration_points_right_arm) < number_of_calibration_points:
+                                encourager_guide_flag = True
                     timer = None
-            elif no_center_found_counter < NO_CENTER_FOUND_MAX:
+            elif no_center_found_counter < NO_CENTER_FOUND_MAX and not no_center_found_flag:
                 no_center_found_counter += 1
-            elif no_center_found_counter == NO_CENTER_FOUND_MAX and timer != None and timer.is_alive() and not no_center_found_flag:
+            #elif no_center_found_counter == NO_CENTER_FOUND_MAX and timer != None and timer.is_alive() and not no_center_found_flag:
+            elif no_center_found_counter == NO_CENTER_FOUND_MAX and not no_center_found_flag:
                 no_center_found_flag = True
                 self._encourager.say("I cannot find your object. Please move it closer to the camera.")
-                timer.kill_timer()
-                timer.join()
+                if timer != None:
+                    timer.kill_timer()
+                    timer.join()
                 timer = None
 
 
@@ -797,6 +814,7 @@ class SimpleMotionExercise(Exercise):
                     timer.kill_timer()
                     timer.join()
                 break
+            self._rate.sleep()
 
         # write calibration results to file, if property set
         if calib_output_file != "" and len(self._calibration_points_left_arm) == number_of_calibration_points and len(self._calibration_points_right_arm) == number_of_calibration_points:
@@ -809,9 +827,10 @@ class SimpleMotionExercise(Exercise):
                 calib_output_file.write("camera_height=" + str(self._video_reader.camera_resolution[1]) + "\n")
                 calib_output_file.write("calibration_points_left_arm=" + str(self._calibration_points_left_arm)+ "\n")
                 calib_output_file.write("calibration_points_right_arm=" + str(self._calibration_points_right_arm)+ "\n")
+                print "good"
         else:
             self._encourager.say("Calibration interrupted!")
-    sleep(2)
+    	sleep(2.5)
 
 
 
@@ -822,7 +841,7 @@ if __name__ == '__main__':
     # parse command-line arguments
     parser = argparse.ArgumentParser(description='Reads video footage from a camera or a video file, and performs the Rehazenter exercise on it.')
     parser.add_argument('--calibrate_only', action="store_true", dest="calibrate_only", help='pass this argument if you only wish to perform the calibration process and not the exercise')
-    parser.add_argument('--calibration_output_file', type=str, dest="calibration_output_file", default="", help='resulting file from the calibration process will be stored in this file path')
+    parser.add_argument('--calibration_output_file', type=str, dest="calibration_output_file", default="/tmp/temp_calib_file.clb", help='resulting file from the calibration process will be stored in this file path')
     parser.add_argument('--results_output_file', type=str, dest="results_output_file", default="/tmp/temp_results_file.tmp", help='results from the exercise will be stored in this file')
 
     # use the "rospy.myargv" argument vector instead of the built-in "sys.argv" to avoid problems with ROS argument re-mapping
