@@ -391,8 +391,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         msg.rotation_type = 0
         msg.emotional_feedback_list = []
         if self.tblEmotionalFeedback.rowCount() > 0:
-            for i in range(0,self.tblEmotionalFeedback.columnCount()-2):
-                print i
+            for i in range(0,self.tblEmotionalFeedback.columnCount()-1):
                 emotional_feedback = EmotionalFeedback()
                 emotional_feedback.is_fixed_feedback = (str(self.tblEmotionalFeedback.item(i, 0).text()) == "fixed")
                 emotional_feedback.repetitions = int(self.tblEmotionalFeedback.item(i, 1).text())
