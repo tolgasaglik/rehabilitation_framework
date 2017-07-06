@@ -114,10 +114,6 @@ class RosServer(object):
             else:
                 rospy.loginfo("Exercise process was interrupted!")
                 exercise_reply.status = 3
-            for tres in exercise_reply.time_results:
-                temp = TimeResult()
-                temp.data = tres
-                time_results.append(temp)
             exercise_reply.time_results = time_results
             exercise_reply.repetitions_results = repetitions_results
             exercise_reply.trajectory_smoothness_results = trajectory_smoothness_results

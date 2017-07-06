@@ -84,7 +84,7 @@ def robot_finished_triggered(gui, status):
         gui.msgErrorWarning.setWindowTitle("Calibration interrupted")
         gui.msgErrorWarning.exec_()
     elif status == 2:
-        gui.msgErrorWarning.setText("Exercise was completed successfully!")
+        gui.msgErrorWarning.setText("Exercise was completed successfully! Results were written to .csv files.")
         gui.msgErrorWarning.setWindowTitle("Exercise successful")
         gui.msgErrorWarning.exec_()
     elif status == 3:
@@ -612,7 +612,8 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             with open("./repetitions_results.csv", "w") as csvfile:
                 repetition_res_writer = csv.writer(csvfile, delimiter="\t")
                 for res in data.repetitions_results:
-                        repetition_res_writer.writerow([res])
+                        print res
+                        repetition_res_writer.writerow([str(res)])
             with open("./trajectory_smoothness_results.csv", "w") as csvfile:
                 ts_res_writer = csv.writer(csvfile, delimiter="\t")
                 for res in data.trajectory_smoothness_results:
