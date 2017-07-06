@@ -612,16 +612,11 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             with open("./repetitions_results.csv", "w") as csvfile:
                 repetition_res_writer = csv.writer(csvfile, delimiter="\t")
                 for res in data.repetitions_results:
-                        print res
-                        repetition_res_writer.writerow([str(res)])
+                        repetition_res_writer.writerow([res])
             with open("./trajectory_smoothness_results.csv", "w") as csvfile:
                 ts_res_writer = csv.writer(csvfile, delimiter="\t")
                 for res in data.trajectory_smoothness_results:
                         ts_res_writer.writerow([res])
-            
-            print "Time results: " + str(data.time_results)
-            print "Repetitions results: " + str(data.repetitions_results)
-            print "Accuracy results: " + str(data.exercise_accuracy_results)
         self._is_calibrating = False
         self.robot_finished.emit(self, data.status)
 
