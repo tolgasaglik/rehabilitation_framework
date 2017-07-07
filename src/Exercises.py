@@ -551,7 +551,7 @@ class Exercise:
         current_block_frame_counter = 0
         total_frame_counter = 0
         time_arr = []
-	for i in range(0,self._number_of_blocks):
+        for i in range(0,self._number_of_blocks):
             temp = [0.0] * self._encourager.repetitions_limit
             time_arr.append(temp)
         trajectory_smoothness_arr = [0.0] * self._number_of_blocks
@@ -561,12 +561,12 @@ class Exercise:
         # sleep for 2 seconds in order to wait for soundplay and video reader to be ready
         sleep(2)
         self._encourager.say("You may begin your exercise now!")
-        #timer = None
-        while current_block <= self._number_of_blocks or self.time_limit > 0 and timer.is_alive():
+        session_timer = None
+        if self.time_limit > 0:
+            session_timer = Timer(self.time_limit)
+            session_timer.start()
+        while current_block <= self._number_of_blocks or self.time_limit > 0 and session_timer.is_alive():
             total_frame_counter += 1
-            if self.time_limit > 0:
-                timer = Timer(self.time_limit)
-                timer.start()
 
             # check if last valid detected object coordinates 
             last_center = self._video_reader.last_valid_center
@@ -622,7 +622,7 @@ class Exercise:
                             current_block += 1
                             
             # check termination conditions
-            if self.time_limit > 0 and not timer.is_alive() or not self._video_reader.is_alive():
+            if self.time_limit > 0 and not session_timer.is_alive() or not self._video_reader.is_alive():
                 break
             self._rate.sleep()
 
@@ -632,10 +632,10 @@ class Exercise:
             self._video_reader.join()
         print "Video reader terminated!"
         if self.time_limit > 0:
-            if timer.is_alive():
+            if session_timer.is_alive():
                 self._encourager.say("Congratulations! You have completed all of the blocks.")
-                timer.kill_timer()
-                timer.join()
+                session_timer.kill_timer()
+                session_timer.join()
             else:
                 self._encourager.say("Time is over!")
                 # TODO: play random congratulation sentence depending on performance
