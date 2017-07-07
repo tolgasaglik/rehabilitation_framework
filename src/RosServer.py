@@ -110,7 +110,9 @@ class RosServer(object):
                         elif line.startswith("trajectory_smoothness="):
                             trajectory_smoothness_results = ast.literal_eval(line[22:])
                 rospy.loginfo("Exercise process was completed successfully!")
-                exercise_reply.status = 2
+                exercise_reply.status = 2 
+                if os.path.exists("/tmp/temp_results_file.tmp"):
+                    os.remove("/tmp/temp_results_file.tmp")
             else:
                 rospy.loginfo("Exercise process was interrupted!")
                 exercise_reply.status = 3
@@ -179,7 +181,8 @@ class RosServer(object):
                                 new_point = CalibrationPoint(point[0], point[1])
                                 right_arm_points.append(new_point)
                 calibration_reply.status = 0
-                os.remove("/tmp/temp_calib_file.clb")
+                if os.path.exists("/tmp/temp_calib_file.clb"):
+                    os.remove("/tmp/temp_calib_file.clb")
             else:
                 rospy.loginfo("Calibration process was interrupted! Unable to record calibration data...")
                 calibration_reply.status = 1

@@ -392,11 +392,12 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         msg.emotional_feedback_list = []
         if self.tblEmotionalFeedback.rowCount() > 0:
             for i in range(0,self.tblEmotionalFeedback.columnCount()-1):
-                emotional_feedback = EmotionalFeedback()
-                emotional_feedback.is_fixed_feedback = (str(self.tblEmotionalFeedback.item(i, 0).text()) == "fixed")
-                emotional_feedback.repetitions = int(self.tblEmotionalFeedback.item(i, 1).text())
-                emotional_feedback.face_to_show = str(self.tblEmotionalFeedback.item(i, 2).text())
-                msg.emotional_feedback_list.append(emotional_feedback)
+                if self.tblEmotionalFeedback.item(i, 0) != None:
+                    emotional_feedback = EmotionalFeedback()
+                    emotional_feedback.is_fixed_feedback = (str(self.tblEmotionalFeedback.item(i, 0).text()) == "fixed")
+                    emotional_feedback.repetitions = int(self.tblEmotionalFeedback.item(i, 1).text())
+                    emotional_feedback.face_to_show = str(self.tblEmotionalFeedback.item(i, 2).text())
+                    msg.emotional_feedback_list.append(emotional_feedback)
         # show error dialog if files fail to load
         try:
             msg.rgb_colors = load_color_file(str(self.lnColorFile.text()))
