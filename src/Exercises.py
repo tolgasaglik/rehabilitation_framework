@@ -261,6 +261,7 @@ class VideoReader(Thread):
 
 class EncouragerUnit(object):
     ENC_SENT_FILELOC = "/config/encouragement_sentences.txt"
+    _happy_emotions_list = ["happy", "neutral", "showing_smile", "surprise", "breathing_exercise", "breathing_exercise_nose", "smile", "happy_blinking", "calming_down"]
 
     @property
     def repetitions_limit(self):
@@ -336,11 +337,11 @@ class EncouragerUnit(object):
         # process emotional feedbacks (= show an emotion on the QT robot face)
         for efb in self._emotional_feedback_list:
             # is feedback fixed? (yes/no)
-            if efb[0] == True and self._repetitions_arr[index] == efb[1]:
-                print efb[2]
-                self._face_pub.publish(efb[2])
-            elif efb[0] == False and self._repetitions_arr[index] % efb[1] == 0 and self._repetitions_arr[index] > 0:
-                self._face_pub.publish(efb[2])
+            if efb[0] == True and self._repetitions_arr[index] == efb[1] or efb[0] == False and self._repetitions_arr[index] % efb[1] == 0 and self._repetitions_arr[index] > 0:
+                if efb[2] == "random emotion":
+                    self._face_pub.publish(self._happy_emotions_list[random.randint(0,len(self._happy_emotions_list)-1)])
+                else:
+                    self._face_pub.publish(efb[2])
 
         # process quantitative feedback (= tell patient how many repetitions he has done so far)
         if self._quantitative_frequency > 0 and self._repetitions_arr[index] in range(0,self._repetitions_limit-1) and self._repetitions_arr[index] % self._quantitative_frequency == 0:

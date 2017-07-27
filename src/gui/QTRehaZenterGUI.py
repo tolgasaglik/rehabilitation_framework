@@ -166,7 +166,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.msgErrorWarning.setStandardButtons(QMessageBox.Ok)
         
         # initialize list of faces (in string form)
-        self._faces_list = ["sad", "happy", "crying"]
+        self._faces_list = ["sad", "happy", "crying", "neutral", "showing_smile", "surprise", "breathing_exercise", "breathing_exercise_nose", "smile", "happy_blinking", "calming_down", "random emotion"]
         self.cmbFaces.addItems(self._faces_list)
         
         # disable various labels and widgets on startup
