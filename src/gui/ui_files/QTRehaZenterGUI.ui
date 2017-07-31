@@ -36,7 +36,7 @@
        </sizepolicy>
       </property>
       <property name="currentIndex">
-       <number>0</number>
+       <number>3</number>
       </property>
       <widget class="QWidget" name="tabWelcome">
        <attribute name="title">
@@ -745,7 +745,7 @@
         <item row="4" column="0">
          <widget class="QGroupBox" name="grpFacialFeedback">
           <property name="title">
-           <string>Facial feedback</string>
+           <string>Emotional feedback</string>
           </property>
           <layout class="QGridLayout" name="gridLayout_10">
            <item row="3" column="0" colspan="2">
@@ -855,6 +855,26 @@
                </property>
               </spacer>
              </item>
+             <item row="3" column="1">
+              <widget class="QCheckBox" name="chkShowGesture">
+               <property name="text">
+                <string/>
+               </property>
+              </widget>
+             </item>
+             <item row="3" column="0">
+              <widget class="QLabel" name="lblShowGesture">
+               <property name="layoutDirection">
+                <enum>Qt::LeftToRight</enum>
+               </property>
+               <property name="text">
+                <string>Show gesture:</string>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+               </property>
+              </widget>
+             </item>
             </layout>
            </item>
            <item row="2" column="0">
@@ -911,7 +931,7 @@
                 <bool>true</bool>
                </property>
                <property name="columnCount">
-                <number>3</number>
+                <number>4</number>
                </property>
                <attribute name="verticalHeaderStretchLastSection">
                 <bool>false</bool>
@@ -929,6 +949,11 @@
                <column>
                 <property name="text">
                  <string>Emotion</string>
+                </property>
+               </column>
+               <column>
+                <property name="text">
+                 <string>Gesture</string>
                 </property>
                </column>
               </widget>
@@ -1335,7 +1360,7 @@ selected line</string>
      <x>0</x>
      <y>0</y>
      <width>659</width>
-     <height>27</height>
+     <height>25</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuEdit">

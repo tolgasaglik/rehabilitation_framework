@@ -397,6 +397,11 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
                     emotional_feedback.is_fixed_feedback = (str(self.tblEmotionalFeedback.item(i, 0).text()) == "fixed")
                     emotional_feedback.repetitions = int(self.tblEmotionalFeedback.item(i, 1).text())
                     emotional_feedback.face_to_show = str(self.tblEmotionalFeedback.item(i, 2).text())
+                    gesture_item_text = self.tblEmotionalFeedback.item(i, 3).text()
+                    if gesture_item_text == "Yes":
+                        emotional_feedback.show_gesture = True
+                    else:
+                        emotional_feedback.show_gesture = False
                     msg.emotional_feedback_list.append(emotional_feedback)
         # show error dialog if files fail to load
         try:
@@ -540,6 +545,10 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.tblEmotionalFeedback.setItem(self.tblEmotionalFeedback.rowCount()-1, 0, QTableWidgetItem(typeText))
         self.tblEmotionalFeedback.setItem(self.tblEmotionalFeedback.rowCount()-1, 1, QTableWidgetItem(repetitionsText))
         self.tblEmotionalFeedback.setItem(self.tblEmotionalFeedback.rowCount()-1, 2, QTableWidgetItem(faceText))
+        if self.chkShowGesture.isChecked():
+            self.tblEmotionalFeedback.setItem(self.tblEmotionalFeedback.rowCount()-1, 3, "Yes")
+        else:
+            self.tblEmotionalFeedback.setItem(self.tblEmotionalFeedback.rowCount()-1, 3, "No")
         self.spnFixedReps.setEnabled(False)
         self.spnFrequencyReps.setEnabled(False)
         self.rdFixed.setChecked(False)

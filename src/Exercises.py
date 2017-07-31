@@ -281,13 +281,10 @@ class EncouragerUnit(object):
         else:
             raise ValueError("Argument spawn_ros_nodes is not boolean!")
 
-    def __init__(self, number_of_blocks, repetitions_limit=10, spawnRosNodes=False, quantitative_frequency=0, qualitative_frequency=0, emotional_feedbacks=[]):
-        self._spawn_ros_nodes = spawnRosNodes
-        self._ros_nodes_ready = False
-        if self.spawn_ros_nodes:
-            self.start_ros_nodes()
-        self._voice_pub = rospy.Publisher('/robot/voice', String, queue_size=1)
+    def __init__(self, number_of_blocks, repetitions_limit=10, quantitative_frequency=0, qualitative_frequency=0, emotional_feedbacks=[]):
+        self._voice_pub = rospy.Publisher('/robot/voice', String, queue_size=5)
         self._face_pub = rospy.Publisher('/qt_face/setEmotion', String, queue_size=1)
+        self._gesture_pub = rospy.Publisher('/robotMovementfromFile', String, queue_size=1)
         self.load_sentences()
         self._repetitions_limit = repetitions_limit
         self._repetitions_arr = [0] * number_of_blocks
@@ -304,33 +301,6 @@ class EncouragerUnit(object):
         self._sentences = sentences_file.readlines()
         sentences_file.close()
 
-    def start_ros_nodes(self):
-        # launch roscore, wm_voice_manager and soundplay
-        self._roscore_node = Popen(['roscore'], stdout=None, stderr=None)
-        sleep(0.5)
-        print "Launched roscore."
-        soundplay = roslaunch.core.Node("sound_play", "soundplay_node.py")
-        wm_voice_generator = roslaunch.core.Node("wm_voice_generator", "wm_voice_component_short.py")
-        launch = roslaunch.scriptapi.ROSLaunch()
-        launch.start()
-        self._soundplay_node = launch.launch(soundplay)
-        sleep(2)
-        print "Launched soundplay."
-        self._wm_voice_generator_node = launch.launch(wm_voice_generator)
-        print "Launched wm_voice_generator"
-        self._ros_nodes_ready = True
-
-    def stop_ros_nodes(self):
-        if self._ros_nodes_ready:
-            if self._soundplay_node.is_alive():
-                self._soundplay_node.stop()
-            if self._wm_voice_generator_node.is_alive():
-                self._wm_voice_generator_node.stop()
-            if self._roscore_node != None :
-                self._roscore_node.terminate()
-                self._roscore_node.wait()
-            self._ros_nodes_ready = False
-
     def inc_repetitions_counter(self, index):
         self._repetitions_arr[index] += 1
 
@@ -342,6 +312,8 @@ class EncouragerUnit(object):
                     self._face_pub.publish(self._happy_emotions_list[random.randint(0,len(self._happy_emotions_list)-1)])
                 else:
                     self._face_pub.publish(efb[2])
+                if efb[3] == True:
+                    self._gesture_pub.publish("insert_name_of_gesture_here")
 
         # process quantitative feedback (= tell patient how many repetitions he has done so far)
         if self._quantitative_frequency > 0 and self._repetitions_arr[index] in range(0,self._repetitions_limit-1) and self._repetitions_arr[index] % self._quantitative_frequency == 0:
@@ -382,7 +354,7 @@ class Timer(Thread):
 class Exercise:
     __metaclass__ = ABCMeta
 
-    def __init__(self, number_of_blocks=1, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), time_limit=0, spawn_ros_nodes=False, robot_position=RobotPosition.LEFT):
+    def __init__(self, number_of_blocks=1, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), time_limit=0, robot_position=RobotPosition.LEFT):
         rospy.init_node('reha_exercise', anonymous=True)
         self.repetitions_limit = repetitions_limit
         self.calibration_duration = calibration_duration
@@ -394,7 +366,6 @@ class Exercise:
         self._number_of_blocks = number_of_blocks
         self.robot_position = robot_position
         self.time_limit = time_limit
-        self._spawn_nodes = spawn_ros_nodes
 
         temp_quant_freq = 0
         temp_quali_freq = 0
@@ -434,7 +405,7 @@ class Exercise:
 
         self._video_reader = VideoReader(rgb_colors, camera_resolution, self._calibration_points_left_arm, self._tolerance_x, self._tolerance_y)
         self._video_reader.start()
-        self._encourager = EncouragerUnit(self._number_of_blocks, self.repetitions_limit, spawnRosNodes=self._spawn_nodes, quantitative_frequency=temp_quant_freq, qualitative_frequency=temp_quali_freq, emotional_feedbacks=temp_emotional_feedbacks)
+        self._encourager = EncouragerUnit(self._number_of_blocks, self.repetitions_limit, quantitative_frequency=temp_quant_freq, qualitative_frequency=temp_quali_freq, emotional_feedbacks=temp_emotional_feedbacks)
         self._rate = rospy.Rate(60) # 60hz
         sleep(0.2)  # wait some miliseconds until the video reader grabs its first frame from the capture device
 
@@ -649,16 +620,11 @@ class Exercise:
                 res_output_file.write("time_results=" + str(time_arr)+ "\n")
                 res_output_file.write("trajectory_smoothness=" + str(trajectory_smoothness_arr)+ "\n")
 
-    def stop_game(self):
-        if self._encourager.spawn_ros_nodes:
-            self._encourager.stop_ros_nodes()
-
-
 
 # exercise that counts circular movements performed on the table surface
 class RotationExercise(Exercise):
-    def __init__(self, number_of_blocks=1, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), hsv_thresholds=((35, 255, 255),(15, 210, 20)), time_limit=0, spawn_ros_nodes=False, robot_position=RobotPosition.LEFT, rotation_type=RotationType.INTERNAL):
-        super(RotationExercise, self).__init__(number_of_blocks, repetitions_limit, calibration_duration, camera_resolution, time_limit, spawn_ros_nodes, robot_position)
+    def __init__(self, number_of_blocks=1, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), hsv_thresholds=((35, 255, 255),(15, 210, 20)), time_limit=0, robot_position=RobotPosition.LEFT, rotation_type=RotationType.INTERNAL):
+        super(RotationExercise, self).__init__(number_of_blocks, repetitions_limit, calibration_duration, camera_resolution, time_limit, robot_position)
         self._rotation_type = rotation_type
         if rospy.has_param('/reha_exercise/rotation_type'):
             self._rotation_type = rospy.get_param("/reha_exercise/rotation_type")
@@ -679,8 +645,8 @@ class RotationExercise(Exercise):
 
 # exercise that counts simple movements with 2 or 3 point coordinates performed on the table surface
 class SimpleMotionExercise(Exercise):
-    def __init__(self, number_of_blocks=1, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), hsv_thresholds=((35, 255, 255),(15, 210, 20)), time_limit=0, spawn_ros_nodes=False, robot_position=RobotPosition.LEFT, motion_type=MotionType.FLEXION):
-        super(SimpleMotionExercise, self).__init__(number_of_blocks, repetitions_limit, calibration_duration, camera_resolution, time_limit, spawn_ros_nodes, robot_position)
+    def __init__(self, number_of_blocks=1, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), hsv_thresholds=((35, 255, 255),(15, 210, 20)), time_limit=0, robot_position=RobotPosition.LEFT, motion_type=MotionType.FLEXION):
+        super(SimpleMotionExercise, self).__init__(number_of_blocks, repetitions_limit, calibration_duration, camera_resolution, time_limit, robot_position)
         self._motion_type = motion_type
         if rospy.has_param('/reha_exercise/motion_type'):
             self._motion_type = rospy.get_param("/reha_exercise/motion_type")
@@ -874,7 +840,6 @@ if __name__ == '__main__':
             exercise.calibrate(args.calibration_output_file)
         else:
             exercise.start_game(args.results_output_file)
-        exercise.stop_game()
     except Exception as e:
         print("An error occured when launching the exercise!\n" + str(e))
         traceback.print_exc(file=sys.stdout)
