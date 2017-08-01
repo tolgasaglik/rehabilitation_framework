@@ -313,7 +313,7 @@ class EncouragerUnit(object):
                 else:
                     self._face_pub.publish(efb[2])
                 if efb[3] == True:
-                    self._gesture_pub.publish("insert_name_of_gesture_here")
+                    self._gesture_pub.publish("testTo5")
 
         # process quantitative feedback (= tell patient how many repetitions he has done so far)
         if self._quantitative_frequency > 0 and self._repetitions_arr[index] in range(0,self._repetitions_limit-1) and self._repetitions_arr[index] % self._quantitative_frequency == 0:

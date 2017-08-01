@@ -546,9 +546,9 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.tblEmotionalFeedback.setItem(self.tblEmotionalFeedback.rowCount()-1, 1, QTableWidgetItem(repetitionsText))
         self.tblEmotionalFeedback.setItem(self.tblEmotionalFeedback.rowCount()-1, 2, QTableWidgetItem(faceText))
         if self.chkShowGesture.isChecked():
-            self.tblEmotionalFeedback.setItem(self.tblEmotionalFeedback.rowCount()-1, 3, "Yes")
+            self.tblEmotionalFeedback.setItem(self.tblEmotionalFeedback.rowCount()-1, 3, QTableWidgetItem("Yes"))
         else:
-            self.tblEmotionalFeedback.setItem(self.tblEmotionalFeedback.rowCount()-1, 3, "No")
+            self.tblEmotionalFeedback.setItem(self.tblEmotionalFeedback.rowCount()-1, 3, QTableWidgetItem("No"))
         self.spnFixedReps.setEnabled(False)
         self.spnFrequencyReps.setEnabled(False)
         self.rdFixed.setChecked(False)
