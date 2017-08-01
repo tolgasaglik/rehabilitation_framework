@@ -259,7 +259,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.tabWidget.setTabEnabled(2, True)
 
     def enableAllWidgets(self):
-        # disable all other buttons while the chosen exercise is running
+        # enable all other widgets
         self.btnFlexionMotionExercise.setEnabled(True)
         self.btnAbductionMotionExercise.setEnabled(True)
         self.btnInternalRotationExercise.setEnabled(True)
@@ -271,8 +271,14 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.spnTimeLimit.setEnabled(True)
         self.chkQualitative.setEnabled(True)
         self.chkQuantitative.setEnabled(True)
-        self.spnQuantEncRep.setEnabled(False)
-        self.cmbQualiEnc.setEnabled(False)
+        if self.chkQualitative.isChecked():
+            self.cmbQualiEnc.setEnabled(True)
+        else:    
+            self.cmbQualiEnc.setEnabled(False)
+        if self.chkQuantitative.isChecked():
+            self.spnQuantEncRep.setEnabled(True)
+        else:
+            self.spnQuantEncRep.setEnabled(False)
         if self.tblEmotionalFeedback.rowCount() > 0:
             self.btnDeleteLine.setEnabled(True)
         else:

@@ -75,7 +75,7 @@ class RosServer(object):
             emotional_feedback_list = []
             eval_str = "["
             for ef in data.emotional_feedback_list:
-                eval_str += "(" + str(ef.is_fixed_feedback) + "," + str(ef.repetitions) + ",'" + str(ef.face_to_show) + ",'" + str(ef.show_gesture) + "'),"
+                eval_str += "(" + str(ef.is_fixed_feedback) + "," + str(ef.repetitions) + ",'" + str(ef.face_to_show) + "'," + str(ef.show_gesture) + "),"
 
             # check if emotional feedback list is empty
             if eval_str == "[":
