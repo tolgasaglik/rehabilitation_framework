@@ -532,7 +532,11 @@ class Exercise:
         end_time = 0.0
         # sleep for 2 seconds in order to wait for soundplay and video reader to be ready
         sleep(2)
-        self._encourager.say("You may begin your exercise now!")
+        self._encourager.say("Your exercise will begin soon.")
+        sleep(2)
+        self._encourager.say("Ready?")
+        sleep(2)
+        self._encourager.say("Go!")
         session_timer = None
         if self.time_limit > 0:
             session_timer = Timer(self.time_limit)
@@ -574,7 +578,7 @@ class Exercise:
                             total_frame_counter = 0
                             self._encourager.say("Block " + str(current_block) + " finished!")
                             self._encourager.say("You did " + str(self._encourager.repetitions_arr[current_block-1]) + " repetitions in this block.")
-                            sleep(2)
+                            sleep(3)
                             if current_block < self._number_of_blocks:
                                 # let patient take a break (probably not needed for now)
                                 #self._encourager.say("Take a 20 seconds break.")
@@ -606,6 +610,7 @@ class Exercise:
         if self.time_limit > 0:
             if session_timer.is_alive():
                 self._encourager.say("Congratulations! You have completed all of the blocks.")
+                sleep(2)
                 session_timer.kill_timer()
                 session_timer.join()
             else:
@@ -685,10 +690,10 @@ class SimpleMotionExercise(Exercise):
         # sleep for 2 seconds in order to wait for soundplay and video reader to be ready
         sleep(2)
         while len(self._calibration_points_right_arm) < number_of_calibration_points:
+            #print no_center_found_counter
+            #print no_center_found_flag
+            #print "-" * 60
             # tell encourager to say a sentence, if needed
-            print no_center_found_counter
-            print no_center_found_flag
-            print "-" * 60
             if encourager_guide_flag:
                 if self._limb == Limb.LEFT_ARM:
                     if len(self._calibration_points_left_arm) == 0:
@@ -718,7 +723,7 @@ class SimpleMotionExercise(Exercise):
                 #if (self._limb == Limb.LEFT_ARM and len(self._calibration_points_left_arm) > 0) or (self._limb == Limb.RIGHT_ARM and len(self._calibration_points_right_arm) > 0):
                 #encourager_guide_flag = True
                 no_center_found_flag = False 
-		print "timer re-init"
+		#print "timer re-init"
 
             # if no object was found in the video capture for some time, wait for object to reappear
             last_center = self._video_reader.center
