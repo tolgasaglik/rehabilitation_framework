@@ -12,6 +12,8 @@ from PyQt4.QtGui import QMessageBox, QFileDialog, QWidget, QTabWidget, QLabel, Q
 import os,sys,inspect,ast
 import rospy
 import cv2
+import MySQLdb
+from Crypto.Hash import SHA256
 # include parent "src" directory to sys.path, otherwise import won't work
 # (source: http://stackoverflow.com/questions/714063/importing-modules-from-parent-folder)
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
@@ -107,16 +109,39 @@ def detected_blobs_received_triggered(gui, img):
     pixmap = QGraphicsPixmapItem(QPixmap(img), None, scene)
     gui.grDetectedObjects.setScene(scene)
     gui.grDetectedObjects.fitInView(scene.sceneRect(), Qt.KeepAspectRatio)
+
+@pyqtSlot(object, str)
+def smartcard_rosmsg_received_triggered(gui, smartcard_id_string):
+    self.lblInsert.setText("SmartCard detected! Please proceed below.")
+    self.lblAuth.setEnabled(True)
+    self.lblPINCode.setEnabled(True)
+    self.lnPINCode.setEnabled(True)
+    self.btnConfirm.setEnabled(True)
+
+
 #------------------------
 
 class QTRehaZenterGUI(QtGui.QMainWindow):
     robot_finished = pyqtSignal(object, int, name="robot_finished")
     original_img_received = pyqtSignal(object, QImage, name="original_img")
     detected_blobs_received = pyqtSignal(object, QImage, name="detected_blobs")
+    smartcard_rosmsg_received = pyqtSignal(object, str, name="smartcard_rosmsg")
     _save_calib_filename = ""
+    
+    # MySQL login info
+    mysql_hostname = "localhost"
+    mysql_password = "ltwforthewin1992+-"
+    mysql_user = "root"
+    
+    # information on the current user
+    _rfid = ""
+    
     def __init__(self):
         super(QTRehaZenterGUI, self).__init__()
         uic.loadUi('ui_files/QTRehaZenterGUI.ui', self)
+        
+        # connect to DB and create cursor object to perform queries
+        self._mysqldb_connection = MySQLdb.connect(host=self.mysql_hostname, user=self.mysql_user, passwd=self.mysql_password, db="iot")
         
         # initialize custom object loader widget
         self.defineNewColorWidget = DefineNewColor.UIDefineNewColorWidget(self)
@@ -178,6 +203,19 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.spnFixedReps.setEnabled(False)
         self.spnFrequencyReps.setEnabled(False)
         self.btnAddLine.setEnabled(False)
+        self.lblAuth.setEnabled(False)
+        self.lblPINCode.setEnabled(False)
+        self.lnPINCode.setEnabled(False)
+        self.lblConfirm.setEnabled(False)
+        self.lblHelloMsg.setVisible(False)
+        self.btnLogoff.setEnabled(False)
+        self.btnLogoff.setVisible(False)
+        self.grProfilePicture.setVisible(True)
+        self.grProfilePicture.setEnabled(True)
+        self.tabWidget.setTabEnabled(1, False)
+        self.tabWidget.setTabEnabled(2, False)
+        self.tabWidget.setTabEnabled(3, False)
+        self.tabWidget.setTabEnabled(4, False)
         
         # resize table columns to match their text size
         header = self.tblEmotionalFeedback.horizontalHeader()
@@ -194,6 +232,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         rospy.Subscriber("calibration_reply", CalibrationReply, self._server_reply_callback)
         rospy.Subscriber("/webcam/original_img", Image, self._original_img_callback)
         rospy.Subscriber("/webcam/detected_blobs", Image, self._detected_blobs_callback)
+        rospy.Subscriber("/user_logging/initial_key", String, self._smartcard_detected_callback)
 
 	    # initialize some other necessary variables
         self._is_calibrating = False
@@ -223,6 +262,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.robot_finished.connect(robot_finished_triggered)
         self.original_img_received.connect(original_img_received_triggered)
         self.detected_blobs_received.connect(detected_blobs_received_triggered)
+        self.btnConfirm.clicked.connect(self.btnConfirmClicked)
     
     # **** some helper functions specific to the class ****
     def disableAllWidgets(self):
@@ -256,6 +296,9 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.btnLoadCalibFile.setEnabled(False)
         self.cmbCreateCalibFileFor.setEnabled(False)
         self.btnCalibrateNow.setEnabled(False)
+        self.btnAddLine.setEnabled(False)
+        self.lnPINCode.setEnabled(False)
+        self.btnLogoff.setEnabled(False)
         self.tabWidget.setTabEnabled(2, True)
 
     def enableAllWidgets(self):
@@ -650,7 +693,45 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         img = QImage(cv_image, width, height, byte_value, QImage.Format_RGB888)
         self.detected_blobs_received.emit(self, img)
 
-        
+    def _smartcard_detected_callback(self, data):
+        self._rfid = data
+        self.smartcard_rosmsg_received.emit(self)
+
+    def btnConfirmClicked(self, data):
+        # check if PIN code corresponds to PIN code stored in database (use SHA-256 to hash passwords!)
+        cursor = self._mysqldb_connection.cursor()
+        cursor.execute("select * from tblUser where userID='" + self._rfid + "'")
+        if cursor.rowcount != 1:
+            printf("User and/or pincode do not match!")
+            return
+        # fetch (only) matching row from DB
+        tblUser_row = cursor.fetchone()
+        # hash pin entered by user with salt string from DB
+        pincode_hash = SHA256.new(data + tblUser_row[4]).hexdigest().upper()
+        if pincode_hash == tblUser_row[3]:
+            # permit access to user and enable widgets accordingly
+            self.tabWidget.setTabEnabled(1, False)
+            self.tabWidget.setTabEnabled(2, False)
+            self.tabWidget.setTabEnabled(3, False)
+            self.tabWidget.setTabEnabled(4, False)
+            self.lblAuth.setEnabled(False)
+            self.lblPINCode.setEnabled(False)
+            self.lnPINCode.setEnabled(False)
+            self.lblConfirm.setEnabled(False)
+            self.lblHelloMsg.setVisible(True)
+            self.lblHelloMsg.setText("Welcome back, " + tblUser_row[1] + "!")
+            self.btnLogoff.setEnabled(True)
+            self.btnLogoff.setVisible(True)
+            self.grProfilePicture.setVisible(True)
+            self.grProfilePicture.setEnabled(True)
+            #scene = QGraphicsScene()
+            #pixmap = QGraphicsPixmapItem(QPixmap(img), None, scene)
+            #gui.grProfilePicture.setScene(scene)
+            #gui.grProfilePicture.fitInView(scene.sceneRect(), Qt.KeepAspectRatio)
+        else:
+            printf("User and/or pincode do not match!")
+
+
 # *******************************************************************************************
          
 if __name__ == "__main__":
