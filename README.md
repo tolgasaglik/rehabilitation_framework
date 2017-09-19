@@ -8,22 +8,12 @@ This repository contains my master thesis work for the University of Luxembourg,
 
 ### How do I get set up? ###
 
-Before running the application, you need to download the *Qt4* and *PyQt4* packages. Run the following commands to do so:
-`sudo apt-get install libqt4-dev python-qt4`
+Before running the application, you need to download the *Qt4* and *PyQt4* packages, as well as the Python API for Mysqldb. Run the following commands to do so:
+`sudo apt-get install libqt4-dev python-qt4 python-mysqldb`
 
 You can run the GUI application using the following commands:
 `cd reha_game/src/gui && python QTRehaZenterGUI.py`
 
-If you wish to only run the *roslaunch* file without the GUI, simply run:
-
-`roslaunch reha_game Exercise_Launcher`
-
-By default, this exercise has been initialized with 10 repetitions and no time limit. You can change these parameters in the GUI itself by clicking on the "*File*" tab and then clicking on "*Preferences...*", or directly in the *roslaunch* call as arguments like so:
-
-`roslaunch reha_game Exercise_Launcher number_of_repetitions:=20 time_limit:=600` (time limit in seconds)
-
-Take a look at the above launch file if you want to check which other parameters you can set.
-
 ### Who do I talk to? ###
 
-* leandro.gomes.001@student.uni.lu
+* gomesf.leandro@gmail.lu

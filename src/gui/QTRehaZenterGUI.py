@@ -718,10 +718,10 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         print pincode_hash
         if pincode_hash == tblUser_row[3]:
             # permit access to user and enable widgets accordingly
-            self.tabWidget.setTabEnabled(1, False)
-            self.tabWidget.setTabEnabled(2, False)
-            self.tabWidget.setTabEnabled(3, False)
-            self.tabWidget.setTabEnabled(4, False)
+            self.tabWidget.setTabEnabled(1, True)
+            self.tabWidget.setTabEnabled(2, True)
+            self.tabWidget.setTabEnabled(3, True)
+            self.tabWidget.setTabEnabled(4, True)
             self.lblAuth.setEnabled(False)
             self.lblPINCode.setEnabled(False)
             self.lnPINCode.setEnabled(False)
@@ -732,10 +732,12 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             self.btnLogoff.setVisible(True)
             self.grProfilePicture.setVisible(True)
             self.grProfilePicture.setEnabled(True)
-            #scene = QGraphicsScene()
-            #pixmap = QGraphicsPixmapItem(QPixmap(img), None, scene)
-            #gui.grProfilePicture.setScene(scene)
-            #gui.grProfilePicture.fitInView(scene.sceneRect(), Qt.KeepAspectRatio)
+            scene = QGraphicsScene()
+            qimg = QtGui.QImage.fromData(tblUser_row[6])
+            pixmap = QGraphicsPixmapItem(QPixmap.fromImage(qimg), None, scene)
+            self.grProfilePicture.setScene(scene)
+            self.grProfilePicture.fitInView(scene.sceneRect(), Qt.KeepAspectRatio)
+            self.grProfilePicture.setVisible(True)
         else:
             print("User and/or pincode do not match!")
         cursor.close()
