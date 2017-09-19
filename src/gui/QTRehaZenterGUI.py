@@ -265,6 +265,9 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.smartcard_rosmsg_received.connect(smartcard_rosmsg_received_triggered)
         self.btnConfirm.clicked.connect(self.btnConfirmClicked)
     
+    def __del__(self):
+        _mysqldb_connection.close()
+    
     # **** some helper functions specific to the class ****
     def disableAllWidgets(self):
         # disable all other buttons while the chosen exercise is running
@@ -706,11 +709,12 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         cursor.execute(query_str)
         if cursor.rowcount != 1:
             print("User and/or pincode do not match!")
+            cursor.close()
             return
         # fetch (only) matching row from DB
         tblUser_row = cursor.fetchone()
         # hash pin entered by user with salt string from DB
-        pincode_hash = SHA256.new(self._rfid + str(tblUser_row[4])).hexdigest().upper()
+        pincode_hash = SHA256.new(str(self.lnPINCode.text()) + str(tblUser_row[4])).hexdigest().upper()
         print pincode_hash
         if pincode_hash == tblUser_row[3]:
             # permit access to user and enable widgets accordingly
@@ -734,6 +738,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             #gui.grProfilePicture.fitInView(scene.sceneRect(), Qt.KeepAspectRatio)
         else:
             print("User and/or pincode do not match!")
+        cursor.close()
 
 
 # *******************************************************************************************
