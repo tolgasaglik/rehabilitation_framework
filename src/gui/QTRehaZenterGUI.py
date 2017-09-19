@@ -22,7 +22,7 @@ sys.path.insert(0,parentdir)
 from PyQt4 import uic
 #from Exercises import Limb,RotationType,MotionType,RobotPosition
 from rehabilitation_framework.msg import *
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool,String
 from sensor_msgs.msg import Image
 import DefineNewColor
 from cv_bridge import CvBridge
@@ -110,13 +110,14 @@ def detected_blobs_received_triggered(gui, img):
     gui.grDetectedObjects.setScene(scene)
     gui.grDetectedObjects.fitInView(scene.sceneRect(), Qt.KeepAspectRatio)
 
-@pyqtSlot(object, str)
-def smartcard_rosmsg_received_triggered(gui, smartcard_id_string):
-    self.lblInsert.setText("SmartCard detected! Please proceed below.")
-    self.lblAuth.setEnabled(True)
-    self.lblPINCode.setEnabled(True)
-    self.lnPINCode.setEnabled(True)
-    self.btnConfirm.setEnabled(True)
+@pyqtSlot(object)
+def smartcard_rosmsg_received_triggered(gui):
+    gui.lblInsert.setEnabled(True)
+    gui.lblInsert.setText("SmartCard detected! Please proceed below.")
+    gui.lblAuth.setVisible(True)
+    gui.lblPINCode.setVisible(True)
+    gui.lnPINCode.setVisible(True)
+    gui.btnConfirm.setVisible(True)
 
 
 #------------------------
@@ -125,7 +126,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
     robot_finished = pyqtSignal(object, int, name="robot_finished")
     original_img_received = pyqtSignal(object, QImage, name="original_img")
     detected_blobs_received = pyqtSignal(object, QImage, name="detected_blobs")
-    smartcard_rosmsg_received = pyqtSignal(object, str, name="smartcard_rosmsg")
+    smartcard_rosmsg_received = pyqtSignal(object, name="smartcard_rosmsg")
     _save_calib_filename = ""
     
     # MySQL login info
@@ -203,15 +204,14 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.spnFixedReps.setEnabled(False)
         self.spnFrequencyReps.setEnabled(False)
         self.btnAddLine.setEnabled(False)
-        self.lblAuth.setEnabled(False)
-        self.lblPINCode.setEnabled(False)
-        self.lnPINCode.setEnabled(False)
-        self.lblConfirm.setEnabled(False)
+        self.lblAuth.setVisible(False)
+        self.lblPINCode.setVisible(False)
+        self.lnPINCode.setVisible(False)
+        self.btnConfirm.setVisible(False)
         self.lblHelloMsg.setVisible(False)
         self.btnLogoff.setEnabled(False)
         self.btnLogoff.setVisible(False)
         self.grProfilePicture.setVisible(True)
-        self.grProfilePicture.setEnabled(True)
         self.tabWidget.setTabEnabled(1, False)
         self.tabWidget.setTabEnabled(2, False)
         self.tabWidget.setTabEnabled(3, False)
@@ -262,6 +262,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.robot_finished.connect(robot_finished_triggered)
         self.original_img_received.connect(original_img_received_triggered)
         self.detected_blobs_received.connect(detected_blobs_received_triggered)
+        self.smartcard_rosmsg_received.connect(smartcard_rosmsg_received_triggered)
         self.btnConfirm.clicked.connect(self.btnConfirmClicked)
     
     # **** some helper functions specific to the class ****
@@ -694,20 +695,23 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.detected_blobs_received.emit(self, img)
 
     def _smartcard_detected_callback(self, data):
-        self._rfid = data
+        print("Card detected!")
+        self._rfid = str(data.data).replace(" ", "")
         self.smartcard_rosmsg_received.emit(self)
 
-    def btnConfirmClicked(self, data):
+    def btnConfirmClicked(self):
         # check if PIN code corresponds to PIN code stored in database (use SHA-256 to hash passwords!)
         cursor = self._mysqldb_connection.cursor()
-        cursor.execute("select * from tblUser where userID='" + self._rfid + "'")
+        query_str = "select * from tblUser where userID='" + self._rfid + "'"
+        cursor.execute(query_str)
         if cursor.rowcount != 1:
-            printf("User and/or pincode do not match!")
+            print("User and/or pincode do not match!")
             return
         # fetch (only) matching row from DB
         tblUser_row = cursor.fetchone()
         # hash pin entered by user with salt string from DB
-        pincode_hash = SHA256.new(data + tblUser_row[4]).hexdigest().upper()
+        pincode_hash = SHA256.new(self._rfid + str(tblUser_row[4])).hexdigest().upper()
+        print pincode_hash
         if pincode_hash == tblUser_row[3]:
             # permit access to user and enable widgets accordingly
             self.tabWidget.setTabEnabled(1, False)
@@ -717,7 +721,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             self.lblAuth.setEnabled(False)
             self.lblPINCode.setEnabled(False)
             self.lnPINCode.setEnabled(False)
-            self.lblConfirm.setEnabled(False)
+            self.btnConfirm.setEnabled(False)
             self.lblHelloMsg.setVisible(True)
             self.lblHelloMsg.setText("Welcome back, " + tblUser_row[1] + "!")
             self.btnLogoff.setEnabled(True)
@@ -729,7 +733,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             #gui.grProfilePicture.setScene(scene)
             #gui.grProfilePicture.fitInView(scene.sceneRect(), Qt.KeepAspectRatio)
         else:
-            printf("User and/or pincode do not match!")
+            print("User and/or pincode do not match!")
 
 
 # *******************************************************************************************
