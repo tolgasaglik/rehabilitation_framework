@@ -1,0 +1,6 @@
+<launch>
+	<!-- <node pkg="sound_play" type="soundplay_node.py" name="sound_play" /> -->
+	<!-- <node pkg="wm_voice_generator" type="wm_voice_component_short.py" name="wm_voice_generator" /> -->
+	<node pkg="iotchallenge" type="monitoring_tool.py" name="monitoring_tool" />
+	<node pkg="rehabilitation_framework" type="QTRehaZenterGUI.py" name="reha_interface" output="screen" />
+</launch>

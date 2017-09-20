@@ -115,9 +115,28 @@ def smartcard_rosmsg_received_triggered(gui):
     gui.lblInsert.setEnabled(True)
     gui.lblInsert.setText("SmartCard detected! Please proceed below.")
     gui.lblAuth.setVisible(True)
+    gui.lblAuth.setEnabled(True)
     gui.lblPINCode.setVisible(True)
+    gui.lblPINCode.setEnabled(True)
     gui.lnPINCode.setVisible(True)
+    gui.lnPINCode.setEnabled(True)
     gui.btnConfirm.setVisible(True)
+    gui.btnConfirm.setEnabled(True)
+
+@pyqtSlot(object)
+def logoff_signal_received_triggered(gui):
+    gui.lblInsert.setText("Please insert your smart card into the card reader to continue...")
+    gui.lblAuth.setVisible(False)
+    gui.lblPINCode.setVisible(False)
+    gui.lnPINCode.setVisible(False)
+    gui.btnConfirm.setVisible(False)
+    gui.grProfilePicture.setVisible(False)
+    gui.lblHelloMsg.setVisible(False)
+    gui.lblRemove.setVisible(False)
+    gui.tabWidget.setTabEnabled(1, False)
+    gui.tabWidget.setTabEnabled(2, False)
+    gui.tabWidget.setTabEnabled(3, False)
+    gui.tabWidget.setTabEnabled(4, False)
 
 
 #------------------------
@@ -127,6 +146,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
     original_img_received = pyqtSignal(object, QImage, name="original_img")
     detected_blobs_received = pyqtSignal(object, QImage, name="detected_blobs")
     smartcard_rosmsg_received = pyqtSignal(object, name="smartcard_rosmsg")
+    logoff_signal_received = pyqtSignal(object, name="logoff_signal")
     _save_calib_filename = ""
     
     # MySQL login info
@@ -135,7 +155,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
     mysql_user = "root"
     
     # information on the current user
-    _rfid = ""
+    _rfid = "None"
     
     def __init__(self):
         super(QTRehaZenterGUI, self).__init__()
@@ -155,10 +175,10 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         imagePixmap_unilu = QGraphicsPixmapItem(QPixmap(QImage("imgs/university_of_luxembourg_logo.png")), None, uniLuLogoScene)
         self.grUniLuLogo.setScene(uniLuLogoScene)
         self.grUniLuLogo.fitInView(uniLuLogoScene.sceneRect(), Qt.KeepAspectRatio)
-        rehaZenterLogoScene = QGraphicsScene()
-        imagePixmap_reha = QGraphicsPixmapItem(QPixmap(QImage("imgs/rehazenter_logo.jpg")), None, rehaZenterLogoScene)
-        self.grRehaZenterLogo.setScene(rehaZenterLogoScene)
-        self.grRehaZenterLogo.fitInView(rehaZenterLogoScene.sceneRect(), Qt.KeepAspectRatio)
+        luxAILogoScene = QGraphicsScene()
+        imagePixmap_luxai = QGraphicsPixmapItem(QPixmap(QImage("imgs/luxai_logo.png")), None, luxAILogoScene)
+        self.grLuxAILogo.setScene(luxAILogoScene)
+        self.grLuxAILogo.fitInView(luxAILogoScene.sceneRect(), Qt.KeepAspectRatio)
         
         # initialize calibration file selection dialog
         self.dlgLoadCalibFile = QFileDialog()
@@ -209,13 +229,14 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.lnPINCode.setVisible(False)
         self.btnConfirm.setVisible(False)
         self.lblHelloMsg.setVisible(False)
-        self.btnLogoff.setEnabled(False)
-        self.btnLogoff.setVisible(False)
+        self.lblRemove.setVisible(False)
         self.grProfilePicture.setVisible(True)
         self.tabWidget.setTabEnabled(1, False)
         self.tabWidget.setTabEnabled(2, False)
         self.tabWidget.setTabEnabled(3, False)
         self.tabWidget.setTabEnabled(4, False)
+        self.lblWrongPINCode.setVisible(False)
+        self.grProfilePicture.setVisible(False)
         
         # resize table columns to match their text size
         header = self.tblEmotionalFeedback.horizontalHeader()
@@ -263,7 +284,9 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.original_img_received.connect(original_img_received_triggered)
         self.detected_blobs_received.connect(detected_blobs_received_triggered)
         self.smartcard_rosmsg_received.connect(smartcard_rosmsg_received_triggered)
+        self.logoff_signal_received.connect(logoff_signal_received_triggered)
         self.btnConfirm.clicked.connect(self.btnConfirmClicked)
+        self.lnPINCode.textChanged.connect(self.disableErrorLabelOnEdit)
     
     def __del__(self):
         _mysqldb_connection.close()
@@ -302,7 +325,6 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.btnCalibrateNow.setEnabled(False)
         self.btnAddLine.setEnabled(False)
         self.lnPINCode.setEnabled(False)
-        self.btnLogoff.setEnabled(False)
         self.tabWidget.setTabEnabled(2, True)
 
     def enableAllWidgets(self):
@@ -698,9 +720,15 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.detected_blobs_received.emit(self, img)
 
     def _smartcard_detected_callback(self, data):
-        print("Card detected!")
-        self._rfid = str(data.data).replace(" ", "")
-        self.smartcard_rosmsg_received.emit(self)
+        #print("Card detected!")
+        # check if monitoring ROS node has detected a smartcard
+        if str(data.data) != "None":
+            self._rfid = str(data.data).replace(" ", "")
+            self.smartcard_rosmsg_received.emit(self)
+        else:
+            if self._rfid != "None":
+                self._rfid = "None"
+                self.logoff_signal_received.emit(self)
 
     def btnConfirmClicked(self):
         # check if PIN code corresponds to PIN code stored in database (use SHA-256 to hash passwords!)
@@ -708,16 +736,17 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         query_str = "select * from tblUser where userID='" + self._rfid + "'"
         cursor.execute(query_str)
         if cursor.rowcount != 1:
-            print("User and/or pincode do not match!")
+            self.lblWrongPINCode.setVisible(True)
             cursor.close()
             return
         # fetch (only) matching row from DB
         tblUser_row = cursor.fetchone()
         # hash pin entered by user with salt string from DB
         pincode_hash = SHA256.new(str(self.lnPINCode.text()) + str(tblUser_row[4])).hexdigest().upper()
-        print pincode_hash
+        #print pincode_hash
         if pincode_hash == tblUser_row[3]:
             # permit access to user and enable widgets accordingly
+            self.lblWrongPINCode.setVisible(False)
             self.tabWidget.setTabEnabled(1, True)
             self.tabWidget.setTabEnabled(2, True)
             self.tabWidget.setTabEnabled(3, True)
@@ -728,8 +757,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             self.btnConfirm.setEnabled(False)
             self.lblHelloMsg.setVisible(True)
             self.lblHelloMsg.setText("Welcome back, " + tblUser_row[1] + "!")
-            self.btnLogoff.setEnabled(True)
-            self.btnLogoff.setVisible(True)
+            self.lblRemove.setVisible(True)
             self.grProfilePicture.setVisible(True)
             self.grProfilePicture.setEnabled(True)
             scene = QGraphicsScene()
@@ -739,8 +767,11 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             self.grProfilePicture.fitInView(scene.sceneRect(), Qt.KeepAspectRatio)
             self.grProfilePicture.setVisible(True)
         else:
-            print("User and/or pincode do not match!")
+            self.lblWrongPINCode.setVisible(True)
         cursor.close()
+
+    def disableErrorLabelOnEdit(self):
+        self.lblWrongPINCode.setVisible(False)
 
 
 # *******************************************************************************************
