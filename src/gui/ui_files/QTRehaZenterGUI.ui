@@ -36,47 +36,256 @@
        </sizepolicy>
       </property>
       <property name="currentIndex">
-       <number>3</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="tabWelcome">
        <attribute name="title">
         <string>Welcome</string>
        </attribute>
-       <widget class="QLabel" name="lblWelcome">
+       <widget class="QLabel" name="lblInsert">
         <property name="geometry">
          <rect>
-          <x>20</x>
-          <y>160</y>
-          <width>601</width>
-          <height>261</height>
+          <x>50</x>
+          <y>240</y>
+          <width>541</width>
+          <height>21</height>
          </rect>
         </property>
         <property name="font">
          <font>
-          <pointsize>22</pointsize>
+          <pointsize>14</pointsize>
          </font>
         </property>
-        <property name="layoutDirection">
-         <enum>Qt::LeftToRight</enum>
-        </property>
         <property name="text">
-         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:24pt;&quot;&gt;Welcome to the&lt;/span&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:28pt;&quot;&gt;&lt;br/&gt;&lt;/span&gt;&lt;span style=&quot; font-size:28pt; font-weight:600; text-decoration: underline; color:#aa0000;&quot;&gt;QT RehaZenter&lt;br/&gt;Exercise Assistant&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-        </property>
-        <property name="textFormat">
-         <enum>Qt::AutoText</enum>
+         <string>Please insert your smart card into the card reader to continue...</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignCenter</set>
         </property>
        </widget>
-       <widget class="QGraphicsView" name="grUniLuLogo">
+       <widget class="QWidget" name="verticalLayoutWidget">
         <property name="geometry">
          <rect>
-          <x>6</x>
-          <y>545</y>
-          <width>161</width>
-          <height>121</height>
+          <x>140</x>
+          <y>310</y>
+          <width>361</width>
+          <height>105</height>
          </rect>
+        </property>
+        <layout class="QVBoxLayout" name="layoutPINCode">
+         <item>
+          <widget class="QLabel" name="lblAuth">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="text">
+            <string>Please enter your PIN code to authenticate yourself.</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <layout class="QHBoxLayout" name="horizontalLayout">
+           <property name="sizeConstraint">
+            <enum>QLayout::SetNoConstraint</enum>
+           </property>
+           <item>
+            <widget class="QLabel" name="lblPINCode">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="text">
+              <string>PIN code:</string>
+             </property>
+             <property name="margin">
+              <number>5</number>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLineEdit" name="lnPINCode">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="btnConfirm">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="font">
+              <font>
+               <weight>75</weight>
+               <bold>true</bold>
+              </font>
+             </property>
+             <property name="text">
+              <string>Confirm</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+         <item>
+          <layout class="QHBoxLayout" name="horizontalLayout_6">
+           <item>
+            <spacer name="horizontalSpacer">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeType">
+              <enum>QSizePolicy::Maximum</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>40</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+           <item>
+            <widget class="QLabel" name="lblWrongPINCode">
+             <property name="font">
+              <font>
+               <weight>75</weight>
+               <bold>true</bold>
+              </font>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">QLabel { color : rgb(255, 0, 0); }</string>
+             </property>
+             <property name="text">
+              <string>PIN code and/or user do not match!</string>
+             </property>
+             <property name="textFormat">
+              <enum>Qt::PlainText</enum>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignCenter</set>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="horizontalSpacer_2">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeType">
+              <enum>QSizePolicy::Maximum</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>40</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+          </layout>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QWidget" name="horizontalLayoutWidget_2">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>10</y>
+          <width>621</width>
+          <height>191</height>
+         </rect>
+        </property>
+        <layout class="QHBoxLayout" name="horizontalLayout_5">
+         <item>
+          <widget class="QGraphicsView" name="grUniLuLogo">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="autoFillBackground">
+            <bool>false</bool>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">background-image: url(../imgs/rehazenter_logo.jpg);</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="lblWelcome">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="font">
+            <font>
+             <pointsize>22</pointsize>
+            </font>
+           </property>
+           <property name="layoutDirection">
+            <enum>Qt::LeftToRight</enum>
+           </property>
+           <property name="text">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:20pt;&quot;&gt;Welcome to the&lt;/span&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:20pt; font-weight:600; text-decoration: underline; color:#aa0000;&quot;&gt;QT Exercise Assistant&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+           <property name="textFormat">
+            <enum>Qt::AutoText</enum>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QGraphicsView" name="grLuxAILogo">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="autoFillBackground">
+            <bool>false</bool>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">background-image: url(../imgs/rehazenter_logo.jpg);</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QGraphicsView" name="grProfilePicture">
+        <property name="enabled">
+         <bool>false</bool>
+        </property>
+        <property name="geometry">
+         <rect>
+          <x>440</x>
+          <y>450</y>
+          <width>171</width>
+          <height>161</height>
+         </rect>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Maximum" vsizetype="Maximum">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
         </property>
         <property name="autoFillBackground">
          <bool>false</bool>
@@ -85,20 +294,50 @@
          <string notr="true">background-image: url(../imgs/rehazenter_logo.jpg);</string>
         </property>
        </widget>
-       <widget class="QGraphicsView" name="grRehaZenterLogo">
+       <widget class="QLabel" name="lblHelloMsg">
         <property name="geometry">
          <rect>
-          <x>460</x>
-          <y>545</y>
-          <width>171</width>
-          <height>121</height>
+          <x>90</x>
+          <y>510</y>
+          <width>301</width>
+          <height>21</height>
          </rect>
         </property>
-        <property name="autoFillBackground">
-         <bool>false</bool>
+        <property name="font">
+         <font>
+          <pointsize>14</pointsize>
+         </font>
         </property>
-        <property name="styleSheet">
-         <string notr="true">background-image: url(../imgs/rehazenter_logo.jpg);</string>
+        <property name="text">
+         <string>Hello, Mr. Blablabla!</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+       <widget class="QLabel" name="lblRemove">
+        <property name="geometry">
+         <rect>
+          <x>250</x>
+          <y>590</y>
+          <width>181</width>
+          <height>17</height>
+         </rect>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+          <italic>true</italic>
+         </font>
+        </property>
+        <property name="text">
+         <string>(remove smart card to log off)</string>
         </property>
        </widget>
       </widget>

@@ -151,8 +151,8 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
     
     # MySQL login info
     mysql_hostname = "localhost"
-    mysql_password = "ltwforthewin1992+-"
-    mysql_user = "root"
+    mysql_password = "qt_exercise_creator"
+    mysql_user = "qt_exercise_creator"
     
     # information on the current user
     _rfid = "None"
