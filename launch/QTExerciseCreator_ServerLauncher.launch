@@ -1,0 +1,19 @@
+<launch>
+  <!-- ============== --> 
+  <!-- Cam Activation --> 
+  <!-- ============== --> 
+  <node name="usb_cam" pkg="usb_cam" type="usb_cam_node" output="screen" /> 
+  
+  
+  <!-- ================ --> 
+  <!-- Voice Activation --> 
+  <!-- ================ --> 
+  <node name="soundplay_node" pkg="sound_play" type="soundplay_node.py"/>
+  <node name="qt_play_sounds_node" pkg="qt_play_sounds" type="qt_play_song_node.py"/>
+  <node name="wm_voice_generator_node" pkg="wm_voice_generator" type="wm_voice_component_short.py" output="screen" />
+    
+  <!-- =========================== --> 
+  <!-- Exercise server  Activation --> 
+  <!-- =========================== --> 
+  <node pkg="rehabilitation_framework" type="RosServer.py" name="reha_exercise" output="screen" />
+</launch>

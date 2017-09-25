@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*)-
 
 # Form implementation generated from reading ui file 'self.UI.ui'
@@ -17,7 +18,9 @@ from Crypto.Hash import SHA256
 # include parent "src" directory to sys.path, otherwise import won't work
 # (source: http://stackoverflow.com/questions/714063/importing-modules-from-parent-folder)
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+#print currentdir
 parentdir = os.path.dirname(currentdir)
+#print parentdir
 sys.path.insert(0,parentdir)
 from PyQt4 import uic
 #from Exercises import Limb,RotationType,MotionType,RobotPosition
@@ -27,6 +30,7 @@ from sensor_msgs.msg import Image
 import DefineNewColor
 from cv_bridge import CvBridge
 import csv
+from Exercises import EncouragerUnit
 
 # some helper functions
 def load_color_file(filename):
@@ -149,6 +153,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
     smartcard_rosmsg_received = pyqtSignal(object, name="smartcard_rosmsg")
     logoff_signal_received = pyqtSignal(object, name="logoff_signal")
     _save_calib_filename = ""
+    _encourager = EncouragerUnit()
     
     # MySQL login info
     mysql_hostname = "192.168.100.1"
@@ -160,7 +165,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
     
     def __init__(self):
         super(QTRehaZenterGUI, self).__init__()
-        uic.loadUi('ui_files/QTRehaZenterGUI.ui', self)
+        uic.loadUi(currentdir + '/ui_files/QTRehaZenterGUI.ui', self)
         
         # connect to DB and create cursor object to perform queries
         self._mysqldb_connection = MySQLdb.connect(host=self.mysql_hostname, user=self.mysql_user, passwd=self.mysql_password, db="iot")
@@ -173,11 +178,11 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         
         # load logo images
         uniLuLogoScene = QGraphicsScene()
-        imagePixmap_unilu = QGraphicsPixmapItem(QPixmap(QImage("imgs/university_of_luxembourg_logo.png")), None, uniLuLogoScene)
+        imagePixmap_unilu = QGraphicsPixmapItem(QPixmap(QImage(currentdir + "/imgs/university_of_luxembourg_logo.png")), None, uniLuLogoScene)
         self.grUniLuLogo.setScene(uniLuLogoScene)
         self.grUniLuLogo.fitInView(uniLuLogoScene.sceneRect(), Qt.KeepAspectRatio)
         luxAILogoScene = QGraphicsScene()
-        imagePixmap_luxai = QGraphicsPixmapItem(QPixmap(QImage("imgs/luxai_logo.png")), None, luxAILogoScene)
+        imagePixmap_luxai = QGraphicsPixmapItem(QPixmap(QImage(currentdir + "/imgs/luxai_logo.png")), None, luxAILogoScene)
         self.grLuxAILogo.setScene(luxAILogoScene)
         self.grLuxAILogo.fitInView(luxAILogoScene.sceneRect(), Qt.KeepAspectRatio)
         
@@ -481,7 +486,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
                     msg.emotional_feedback_list.append(emotional_feedback)
         # show error dialog if files fail to load
         try:
-            msg.rgb_colors = load_color_file(str(self.lnColorFile.text()))
+            msg.rgb_colors = load_color_file(currentdir + "/" + str(self.lnColorFile.text()))
         except ValueError:
             self.msgErrorWarning.setText("The specified color file has invalid contents!")
             self.msgErrorWarning.setWindowTitle("Invalid color file")
@@ -493,7 +498,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             self.msgErrorWarning.exec_()
             return
         try:
-            calib_data = load_calib_file(self.lnCalibFile.text())
+            calib_data = load_calib_file(currentdir + "/" + str(self.lnCalibFile.text()))
         except ValueError:
             self.msgErrorWarning.setText("The specified calibration file has invalid contents!")
             self.msgErrorWarning.setWindowTitle("Invalid calibration file")
@@ -669,7 +674,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             # write calibration points to file
             if not self._save_calib_filename.endsWith(".clb"):
                 self._save_calib_filename += ".clb"
-            calib_fileptr = open(self._save_calib_filename, "w")
+            calib_fileptr = open(currentdir + "/" + self._save_calib_filename, "w")
             if str(self.cmbCreateCalibFileFor.currentText()) == "flexion exercise":
                 calib_fileptr.write("motion_type=1\n")
                 calib_fileptr.write("rotation_type=0\n")
@@ -690,15 +695,15 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             calib_fileptr.close()
         elif data.status == 2:
             #process exercise results message
-            with open("./time_results.csv", "w") as csvfile:
+            with open(currentdir + "/time_results.csv", "w") as csvfile:
                 time_res_writer = csv.writer(csvfile, delimiter="\t")
                 for res in data.time_results:
                         time_res_writer.writerow(res.data)
-            with open("./repetitions_results.csv", "w") as csvfile:
+            with open(currentdir + "/repetitions_results.csv", "w") as csvfile:
                 repetition_res_writer = csv.writer(csvfile, delimiter="\t")
                 for res in data.repetitions_results:
                         repetition_res_writer.writerow([res])
-            with open("./trajectory_smoothness_results.csv", "w") as csvfile:
+            with open(currentdir + "/trajectory_smoothness_results.csv", "w") as csvfile:
                 ts_res_writer = csv.writer(csvfile, delimiter="\t")
                 for res in data.trajectory_smoothness_results:
                         ts_res_writer.writerow([res])
@@ -734,6 +739,8 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             if self._rfid != "None" and msg == "None":
                 self._rfid = "None"
                 self.logoff_signal_received.emit(self)
+                self._encourager.say("Good bye!")
+                self._encourager.show_emotion("smile")
 
     def btnConfirmClicked(self):
         # check if PIN code corresponds to PIN code stored in database (use SHA-256 to hash passwords!)
@@ -771,6 +778,8 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             self.grProfilePicture.setScene(scene)
             self.grProfilePicture.fitInView(scene.sceneRect(), Qt.KeepAspectRatio)
             self.grProfilePicture.setVisible(True)
+            self._encourager.say("Welcome back, " + tblUser_row[2] + "!")
+            self._encourager.show_emotion("happy")
         else:
             self.lblWrongPINCode.setVisible(True)
         cursor.close()

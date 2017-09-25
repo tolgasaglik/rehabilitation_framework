@@ -281,7 +281,7 @@ class EncouragerUnit(object):
         else:
             raise ValueError("Argument spawn_ros_nodes is not boolean!")
 
-    def __init__(self, number_of_blocks, repetitions_limit=10, quantitative_frequency=0, qualitative_frequency=0, emotional_feedbacks=[]):
+    def __init__(self, number_of_blocks=1, repetitions_limit=10, quantitative_frequency=0, qualitative_frequency=0, emotional_feedbacks=[]):
         self._voice_pub = rospy.Publisher('/robot/voice', String, queue_size=5)
         self._face_pub = rospy.Publisher('/qt_face/setEmotion', String, queue_size=1)
         self._gesture_pub = rospy.Publisher('/robotMovementfromFile', String, queue_size=1)
@@ -327,6 +327,14 @@ class EncouragerUnit(object):
     def say(self, sentence):
         self._voice_pub.publish(sentence)
         print "The robot says: \"" + sentence + "\""
+
+    def show_emotion(self, emotion):
+	if emotion not in self._happy_emotions_list:
+	    raise Exception("Emotion not recognized!")
+        else:
+            self._face_pub.publish(emotion)
+            print("The robot is showing the following emotion: " + emotion + "!")
+                
 
 
 # implementation of a custom timer thread that simply counts seconds up to some defined limit

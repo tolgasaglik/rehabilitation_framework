@@ -1,0 +1,4 @@
+<launch>
+  <node pkg="iotchallenge" type="monitoring_tool.py" name="monitoring_tool" output="screen" />
+  <node pkg="rehabilitation_framework" type="QTRehaZenterGUI.py" name="reha_interface" output="screen" />
+</launch>

@@ -1,12 +1,18 @@
 from PyQt4 import uic
 from PyQt4.QtCore import QPoint, Qt
 from PyQt4.QtGui import QColor, QSizePolicy, QPainter, QWidget, QFileDialog, QGraphicsScene, QGraphicsView, QImage, QBrush, QPixmap, QGraphicsPixmapItem
+import os,inspect
+currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+#print currentdir
+parentdir = os.path.dirname(currentdir)
+#print parentdir
+
 
 
 class UIDefineNewColorWidget(QWidget):
 	def __init__(self, main_window_ref):
 		super(UIDefineNewColorWidget, self).__init__()
-		uic.loadUi('ui_files/DefineNewColor.ui', self)
+		uic.loadUi(currentdir + '/ui_files/DefineNewColor.ui', self)
 		self._main_window_ref = main_window_ref
 		self._MAX_COLORS = 10
 
@@ -60,7 +66,7 @@ class UIDefineNewColorWidget(QWidget):
 			filename = self.dlgSaveColors.selectedFiles()[0]
 			if not filename.endsWith(".clr"):
 				filename += ".clr"
-			color_file = open(filename, "w")
+			color_file = open(currentdir + "/" + filename, "w")
 
 			# save selected colors to file
 			for color in self._detected_colors:
