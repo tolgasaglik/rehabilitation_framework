@@ -151,7 +151,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
     _save_calib_filename = ""
     
     # MySQL login info
-    mysql_hostname = "localhost"
+    mysql_hostname = "192.168.100.1"
     mysql_password = "qt_exercise_creator"
     mysql_user = "qt_exercise_creator"
     
@@ -723,11 +723,15 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
     def _smartcard_detected_callback(self, data):
         #print("Card detected!")
         # check if monitoring ROS node has detected a smartcard
-        if str(data.data) != "None":
-            self._rfid = str(data.data).replace(" ", "")
+        msg = str(data.data).replace(" ", "")
+        if msg != "None" and self._rfid == "None":
+            self._rfid = msg
+            # just in case the user inserts another smart card before logoff is triggered...
+            if self._rfid != msg:
+		self.logoff_signal_received.emit(self)
             self.smartcard_rosmsg_received.emit(self)
         else:
-            if self._rfid != "None":
+            if self._rfid != "None" and msg == "None":
                 self._rfid = "None"
                 self.logoff_signal_received.emit(self)
 
