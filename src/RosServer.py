@@ -86,7 +86,7 @@ class RosServer(object):
 
             # launch exercise instance as process
             rospy.loginfo("Running exercise with current configuration...")
-            launch_params = ['roslaunch', 'rehabilitation_framework', 'Exercise_Launcher.launch']
+            launch_params = ['roslaunch', 'rehabilitation_framework', 'Exercise_Creator.launch']
             self._exercise_instance = Popen(launch_params)
             self._exercise_instance.wait()
 
@@ -156,7 +156,7 @@ class RosServer(object):
 
             # launch calibration process (as an exercise instance)
             rospy.loginfo("Running calibration process with current configuration...")
-            launch_params = ['roslaunch', 'rehabilitation_framework', 'Exercise_Launcher.launch', 'calibration_output_file:=/tmp/temp_calib_file.clb']
+            launch_params = ['roslaunch', 'rehabilitation_framework', 'Exercise_Creator.launch', 'calibration_output_file:=/tmp/temp_calib_file.clb']
             self._exercise_instance = Popen(launch_params)
             self._exercise_instance.wait()
 
