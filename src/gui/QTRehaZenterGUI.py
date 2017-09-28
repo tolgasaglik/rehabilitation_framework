@@ -30,7 +30,8 @@ from sensor_msgs.msg import Image
 import DefineNewColor
 from cv_bridge import CvBridge
 import csv
-from Exercises import EncouragerUnit
+from EncouragerUnit import EncouragerUnit
+from Exercises import SimpleMotionExercise, RotationExercise
 
 # some helper functions
 def load_color_file(filename):
@@ -100,20 +101,12 @@ def robot_finished_triggered(gui, status):
     gui.enableAllWidgets()
 
 @pyqtSlot(object, QImage)
-def original_img_received_triggered(gui, img):
+def img_received_triggered(gui, img):
     scene = QGraphicsScene()
     pixmap = QGraphicsPixmapItem(QPixmap(img), None, scene)
     gui.grOriginalImage.setScene(scene)
     gui.grOriginalImage.fitInView(scene.sceneRect(), Qt.KeepAspectRatio)
     
-    
-@pyqtSlot(object, QImage)
-def detected_blobs_received_triggered(gui, img):
-    scene = QGraphicsScene()
-    pixmap = QGraphicsPixmapItem(QPixmap(img), None, scene)
-    gui.grDetectedObjects.setScene(scene)
-    gui.grDetectedObjects.fitInView(scene.sceneRect(), Qt.KeepAspectRatio)
-
 @pyqtSlot(object)
 def smartcard_rosmsg_received_triggered(gui):
     gui.lblInsert.setEnabled(True)
@@ -148,9 +141,8 @@ def logoff_signal_received_triggered(gui):
 
 class QTRehaZenterGUI(QtGui.QMainWindow):
     robot_finished = pyqtSignal(object, int, name="robot_finished")
-    original_img_received = pyqtSignal(object, QImage, name="original_img")
-    detected_blobs_received = pyqtSignal(object, QImage, name="detected_blobs")
-    smartcard_rosmsg_received = pyqtSignal(object, name="smartcard_rosmsg")
+    img_received = pyqtSignal(object, QImage, name="img_received")
+    smartcard_rosmsg_received = pyqtSignal(object, name="smartcard_rosmsg_received")
     logoff_signal_received = pyqtSignal(object, name="logoff_signal")
     _save_calib_filename = ""
     _encourager = EncouragerUnit()
@@ -257,11 +249,10 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self._calibration_request_pub = rospy.Publisher("calibration_request", CalibrationRequest, queue_size=1)
         rospy.Subscriber("exercise_reply", ExerciseReply, self._server_reply_callback)
         rospy.Subscriber("calibration_reply", CalibrationReply, self._server_reply_callback)
-        rospy.Subscriber("/webcam/original_img", Image, self._original_img_callback)
-        rospy.Subscriber("/webcam/detected_blobs", Image, self._detected_blobs_callback)
+        rospy.Subscriber("/usb_cam/image_modified", Image, self._img_received_callback)
         rospy.Subscriber("/user_logging/initial_key", String, self._smartcard_detected_callback)
 
-	    # initialize some other necessary variables
+	# initialize some other necessary variables
         self._is_calibrating = False
         self._bridge = CvBridge()
         
@@ -287,8 +278,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.btnLoadCalibFile.clicked.connect(self.btnLoadCalibFileClicked)
         self.btnCalibrateNow.clicked.connect(self.btnCalibrateNowClicked)
         self.robot_finished.connect(robot_finished_triggered)
-        self.original_img_received.connect(original_img_received_triggered)
-        self.detected_blobs_received.connect(detected_blobs_received_triggered)
+        self.img_received.connect(img_received_triggered)
         self.smartcard_rosmsg_received.connect(smartcard_rosmsg_received_triggered)
         self.logoff_signal_received.connect(logoff_signal_received_triggered)
         self.btnConfirm.clicked.connect(self.btnConfirmClicked)
@@ -519,6 +509,8 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
     def btnStopClicked(self):
         # stop exercise on robot
         self._exercise_stop_pub.publish(self._is_calibrating)
+        self._is_calibrating = False
+        self._is_exercise_running = False
 
         # enable all other buttons again
         self.enableAllWidgets()
@@ -656,10 +648,9 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
     def closeEvent(self, event):
         reply = QtGui.QMessageBox.question(self, 'Message', "Are you sure that you want to quit?", QtGui.QMessageBox.Yes, QtGui.QMessageBox.No)
         if reply == QtGui.QMessageBox.Yes:
-            if hasattr(self, "exercise_process") and self.exercise_process != None:
-                #self.exercise_process.communicate(input="q")
-                self.exercise_process.terminate()
-                self.exercise_process.wait()
+            # stop anything that might still be running on the robot
+            if self._is_exercise_running or self._is_calibrating:
+                self._exercise_stop_pub.publish(self._is_calibrating)
             event.accept()
         else:
             event.ignore()
@@ -671,6 +662,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         #	2: exercise reply, success
         #	3: exercise reply, interrupted/error
         if data.status == 0:
+            self._is_calibrating = False
             # write calibration points to file
             if not self._save_calib_filename.endsWith(".clb"):
                 self._save_calib_filename += ".clb"
@@ -694,6 +686,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             calib_fileptr.write(str_to_write[:-1] + "]\n")
             calib_fileptr.close()
         elif data.status == 2:
+            self._is_exercise_running = False
             #process exercise results message
             with open(currentdir + "/time_results.csv", "w") as csvfile:
                 time_res_writer = csv.writer(csvfile, delimiter="\t")
@@ -707,23 +700,14 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
                 ts_res_writer = csv.writer(csvfile, delimiter="\t")
                 for res in data.trajectory_smoothness_results:
                         ts_res_writer.writerow([res])
-        self._is_calibrating = False
         self.robot_finished.emit(self, data.status)
 
-    def _original_img_callback(self, data):
+    def _img_received_callback(self, data):
         cv_image = self._bridge.imgmsg_to_cv2(data, desired_encoding="rgb8")
         height, width, byte_value = cv_image.shape
         byte_value = byte_value * width
         img = QImage(cv_image, width, height, byte_value, QImage.Format_RGB888)
         self.original_img_received.emit(self, img)
-
-    def _detected_blobs_callback(self, data):
-        cv_image = self._bridge.imgmsg_to_cv2(data, desired_encoding="mono8")
-        cv_image = cv2.cvtColor(cv_image, cv2.COLOR_GRAY2RGB)
-        height, width, byte_value = cv_image.shape
-        byte_value = byte_value * width
-        img = QImage(cv_image, width, height, byte_value, QImage.Format_RGB888)
-        self.detected_blobs_received.emit(self, img)
 
     def _smartcard_detected_callback(self, data):
         #print("Card detected!")
@@ -760,7 +744,6 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             # permit access to user and enable widgets accordingly
             self.lblWrongPINCode.setVisible(False)
             self.tabWidget.setTabEnabled(1, True)
-            self.tabWidget.setTabEnabled(2, True)
             self.tabWidget.setTabEnabled(3, True)
             self.tabWidget.setTabEnabled(4, True)
             self.lblAuth.setEnabled(False)

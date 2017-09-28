@@ -1,34 +1,22 @@
 #!/usr/bin/env python
 
 from abc import ABCMeta, abstractmethod
-import cv2
-import signal
 import numpy as np
 import sys, traceback
 import argparse
 import roslib; roslib.load_manifest('rehabilitation_framework')
 import ast
-import roslaunch,rospkg,rospy,rosparam
+import rospy,rosparam
 from std_msgs.msg import String
 from sensor_msgs.msg import Image
-from os.path import expanduser
-import os
-import shlex
-from subprocess import Popen,PIPE,STDOUT
 from threading import Thread
 from time import time,sleep
 import signal
 from rehabilitation_framework.msg import * 
 import random
-from cv_bridge import CvBridge
+from StreamReader import USBCamReader, OpenCVReader
+import EncouragerUnit
 
-#                 |y=-0.1
-#        D        |      A
-#x=-0.1           |             x=0.1
-#------------------------------------
-#                 |
-#       C         |      B
-#                 |y=0.1
 
 
 # some class definitions that represent enums
@@ -72,269 +60,6 @@ def process_args(argv):
         rospy.set_param_raw("repetitions_limit", data.repetitions)
     if args.time_limit != None:
         rospy.set_param_raw("time_limit", data.time_limit)
-
-class VideoReader(Thread):
-    def __init__(self, rgb_colors, camera_resolution=(640,480), current_calibration_points=[], tolerance_x=0, tolerance_y=0):
-        # Initialize camera and get actual resolution
-        Thread.__init__(self)
-        self.camera_resolution = camera_resolution
-        self._center = None
-        self._last_valid_center = None
-        self._radius = 0
-        self._kill_thread = False
-        self._tolerance_x = tolerance_x
-        self._tolerance_y = tolerance_y
-
-        # calculate HSV (or RGB!) thresholds from rgb_colors array
-        self._hsv_threshold_lower = np.array([255,255,255], dtype=np.uint8)
-        for color in rgb_colors:
-            color_true = np.array([[[color[2],color[1],color[0]]]], dtype=np.uint8)
-            hsv_color = cv2.cvtColor(color_true,cv2.COLOR_BGR2HSV)
-            self._hsv_threshold_lower = np.array([min(self._hsv_threshold_lower[0],hsv_color[0][0][0]), min(self._hsv_threshold_lower[1],hsv_color[0][0][1]), min(self._hsv_threshold_lower[2],hsv_color[0][0][2])], dtype=np.uint8)
-        self._hsv_threshold_upper = np.array([self._hsv_threshold_lower[0]+5,255,255], dtype=np.uint8)
-        if int(self._hsv_threshold_lower[0])-10 < 0:
-            self._hsv_threshold_lower[0] = 0
-        else:
-            self._hsv_threshold_lower[0] = self._hsv_threshold_upper[0]-10
-
-        print str("Upper threshold: " + str(self._hsv_threshold_upper))
-        print str("Lower threshold: " + str(self._hsv_threshold_lower))
-
-        # define behaviour when SIGINT or SIGTERM received
-        signal.signal(signal.SIGINT, self.exit_gracefully)
-        signal.signal(signal.SIGTERM, self.exit_gracefully)
-
-        # initialize place holders for calibration points
-        self._current_calibration_point_index = 0
-        self._current_calibration_points = current_calibration_points
-
-        # initialize camera image publisher
-        self._img_mod_pub = rospy.Publisher("/webcam/detected_blobs", Image, queue_size=5)
-        self._img_original_pub = rospy.Publisher("/webcam/original_img", Image, queue_size=5)
-        self._rate = rospy.Rate(60) # 60hz
-
-
-    def exit_gracefully(self, signum, frame):
-	print "Captured signal, beginning graceful shutdown."
-        self.set_kill_thread()
-
-    # ****************************** property definitions for the base class ******************************
-    @property
-    def img_original(self):
-        return self._img_original
-
-    @property
-    def img_modified(self):
-        return self._img_modified
-
-    @property
-    def hsv_thresholds(self):
-        return (self._hsv_threshold_lower, self._hsv_threshold_upper)
-
-    @property
-    def last_valid_center(self):
-        return self._last_valid_center
-
-    @property
-    def center(self):
-        return self._center
-
-    @property
-    def radius(self):
-        return self._radius
-
-    @property
-    def camera_resolution(self):
-        return (self._camera_width, self._camera_height)
-    @camera_resolution.setter
-    def camera_resolution(self, camera_resolution):
-        if not type(camera_resolution) is tuple or len(camera_resolution) != 2:
-            raise TypeError("camera_resolution argument must be a tuple of two integers!")
-        elif not all(type(x) is int for x in camera_resolution):
-            raise TypeError("Tuple must only contain integers!")
-        elif camera_resolution[0] not in [320,424,640,848,960,1280,1920] or camera_resolution[1] not in [180,240,360,480,540,720,1080]:
-            raise ValueError("Invalid camera resolution!")
-        else:   
-            self._camera_width = camera_resolution[0]
-            self._camera_height = camera_resolution[1]
-    # *****************************************************************************************************
-
-    def set_kill_thread(self):
-        self._kill_thread = True
-
-    def run(self):
-        # start capture device
-        self._cap = cv2.VideoCapture(0)
-
-        # set camera width and height
-        self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.camera_resolution[0])
-        self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.camera_resolution[1])
-
-        # check if camera/video file was opened successfully
-        if not self._cap.isOpened():
-            raise Exception("Failed to open video capture stream! Aborting...")
-        #self.set_kill_thread()
-
-        # Minimum required radius of enclosing circle of contour
-        MIN_RADIUS = 12
-
-        # read frames from the capture device until interruption
-        bridge = CvBridge()
-        while not self._kill_thread:
-            rval, img_original = self._cap.read()
-            #if not rval:
-            #        raise Exception("Failed to get frame from capture device!")
-            self._img_original = img_original.copy()
-
-            # Blur image to remove noise
-            img_modified = cv2.GaussianBlur(img_original.copy(), (3, 3), 0)
-
-            # Convert image from BGR to HSV
-            img_modified = cv2.cvtColor(img_modified, cv2.COLOR_BGR2HSV)
-
-            # Set pixels to white if in color range, others to black (binary bitmap)
-            img_modified = cv2.inRange(img_modified, self._hsv_threshold_lower, self._hsv_threshold_upper)
-
-            # Dilate image to make white blobs larger
-            self._img_modified = cv2.dilate(img_modified, None, iterations = 1)
-
-            # Find center of object using contours instead of blob detection. From:
-            # http://www.pyimagesearch.com/2015/09/14/ball-tracking-with-opencv/
-            contours = cv2.findContours(self._img_modified, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
-            self._center = None
-            self._radius = 0
-            if len(contours) > 0:
-                c = max(contours, key=cv2.contourArea)
-                ((x, y), self._radius) = cv2.minEnclosingCircle(c)
-                M = cv2.moments(c)
-                if M["m00"] > 0:
-                    self._center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
-                    if self._radius < MIN_RADIUS:
-                        self._center = None
-
-            #if center != None:
-                #moment = int(center[0]/(self.camera_resolution[0]/32))
-                #print moment
-                #if (moment < self._last_moment):
-                #   self._last_moment = moment
-                #   moment_status = -1
-                #elif (moment > self._last_moment):
-                #   self._last_moment = moment
-                #   moment_status = 1
-            #self._last_moment_status = moment_status
-            # draw a green circle around the largest enclosed contour
-
-            # draw circle arround the detected object and write number of repetitions done on frame
-            if self._center != None:
-                self._last_valid_center = self._center
-                cv2.circle(self._img_original, self._last_valid_center, int(round(self._radius)), np.array([0,255,0]))
-
-            # draw calibration point bounding boxes on original image, if given
-            if len(self._current_calibration_points) > 0:
-                img_alpha_overlay = self._img_original.copy()
-                for i,point in enumerate(self._current_calibration_points):
-                    if i == self._current_calibration_point_index:
-                        color = np.array([0,255,0])
-                    else:
-                        color = np.array([0,0,255])
-                    cv2.rectangle(img_alpha_overlay, (point[0]+self._tolerance_x,point[1]+self._tolerance_y), (point[0]-self._tolerance_x,point[1]-self._tolerance_y), color, -1)
-                cv2.addWeighted(img_alpha_overlay, 0.3, self._img_original, 0.7, 0, self._img_original)
-            
-            # publish images to ROS topics
-            img_original_msg = bridge.cv2_to_imgmsg(self._img_original, encoding="bgr8")
-            img_modified_msg = bridge.cv2_to_imgmsg(self._img_modified, encoding="mono8")
-            self._img_original_pub.publish(img_original_msg)
-            self._img_mod_pub.publish(img_modified_msg)
-            self._rate.sleep()
-
-    # returns the latest frame that was retrieve by the capture device
-    def get_next_frame(self):
-        if hasattr(self, "_frame"):
-            return self._frame
-
-    def update_calib_point_index(self):
-        self._current_calibration_point_index = (self._current_calibration_point_index+1) % len(self._current_calibration_points)
-
-    def update_calib_points(self, new_calibration_points):
-        self._current_calibration_points = new_calibration_points
-        self._current_calibration_point_index = 0
-
-class EncouragerUnit(object):
-    ENC_SENT_FILELOC = "/config/encouragement_sentences.txt"
-    _happy_emotions_list = ["happy", "neutral", "showing_smile", "surprise", "breathing_exercise", "breathing_exercise_nose", "smile", "happy_blinking", "calming_down"]
-
-    @property
-    def repetitions_limit(self):
-        return self._repetitions_limit
-
-    @property
-    def repetitions_arr(self):
-        return self._repetitions_arr
-
-    @property
-    def spawn_ros_nodes(self):
-        return self._spawn_ros_nodes
-    @spawn_ros_nodes.setter
-    def spawn_ros_nodes(self, spawn_ros_nodes):
-        if type(spawn_ros_nodes) is bool:
-            self._spawn_ros_nodes = spawn_ros_nodes
-        else:
-            raise ValueError("Argument spawn_ros_nodes is not boolean!")
-
-    def __init__(self, number_of_blocks=1, repetitions_limit=10, quantitative_frequency=0, qualitative_frequency=0, emotional_feedbacks=[]):
-        self._voice_pub = rospy.Publisher('/robot/voice', String, queue_size=5)
-        self._face_pub = rospy.Publisher('/qt_face/setEmotion', String, queue_size=1)
-        self._gesture_pub = rospy.Publisher('/robotMovementfromFile', String, queue_size=1)
-        self.load_sentences()
-        self._repetitions_limit = repetitions_limit
-        self._repetitions_arr = [0] * number_of_blocks
-        self._emotional_feedback_list = emotional_feedbacks
-        self._quantitative_frequency = quantitative_frequency
-        self._qualitative_frequency = qualitative_frequency
-        random.seed()
-        
-    def load_sentences(self):
-        # retrieve path to reha_game ROS package and load sentences file
-        rospack = rospkg.RosPack()
-        reha_game_pkg_path = rospack.get_path('rehabilitation_framework')
-        sentences_file = open(reha_game_pkg_path + self.ENC_SENT_FILELOC, "r")
-        self._sentences = sentences_file.readlines()
-        sentences_file.close()
-
-    def inc_repetitions_counter(self, index):
-        self._repetitions_arr[index] += 1
-
-        # process emotional feedbacks (= show an emotion on the QT robot face)
-        for efb in self._emotional_feedback_list:
-            # is feedback fixed? (yes/no)
-            if efb[0] == True and self._repetitions_arr[index] == efb[1] or efb[0] == False and self._repetitions_arr[index] % efb[1] == 0 and self._repetitions_arr[index] > 0:
-                if efb[2] == "random emotion":
-                    self._face_pub.publish(self._happy_emotions_list[random.randint(0,len(self._happy_emotions_list)-1)])
-                else:
-                    self._face_pub.publish(efb[2])
-                if efb[3] == True:
-                    self._gesture_pub.publish("testTo5")
-
-        # process quantitative feedback (= tell patient how many repetitions he has done so far)
-        if self._quantitative_frequency > 0 and self._repetitions_arr[index] in range(0,self._repetitions_limit-1) and self._repetitions_arr[index] % self._quantitative_frequency == 0:
-            self._voice_pub.publish(str(self._repetitions_arr[index]))
-            print "Current number of repetitions done: " + str(self._repetitions_arr[index])
-
-        # process qualitative feedback (= tell patient some randomly chosen motivational sentence)
-        if self._qualitative_frequency > 0 and self._repetitions_arr[index] in range(0,self._repetitions_limit-1) and self._repetitions_arr[index] % self._qualitative_frequency == 0:
-            self._voice_pub.publish(self._sentences[random.randint(0,len(self._sentences)-1)])
-
-    def say(self, sentence):
-        self._voice_pub.publish(sentence)
-        print "The robot says: \"" + sentence + "\""
-
-    def show_emotion(self, emotion):
-	if emotion not in self._happy_emotions_list:
-	    raise Exception("Emotion not recognized!")
-        else:
-            self._face_pub.publish(emotion)
-            print("The robot is showing the following emotion: " + emotion + "!")
-                
 
 
 # implementation of a custom timer thread that simply counts seconds up to some defined limit
@@ -411,10 +136,10 @@ class Exercise:
         self._tolerance_x = camera_resolution[0] / 12
         self._tolerance_y = camera_resolution[1] / 12
 
-        self._video_reader = VideoReader(rgb_colors, camera_resolution, self._calibration_points_left_arm, self._tolerance_x, self._tolerance_y)
-        self._video_reader.start()
+        self._video_reader = USBCamReader(rgb_colors, camera_resolution, self._calibration_points_left_arm, self._tolerance_x, self._tolerance_y)
+        #self._video_reader.start()
         self._encourager = EncouragerUnit(self._number_of_blocks, self.repetitions_limit, quantitative_frequency=temp_quant_freq, qualitative_frequency=temp_quali_freq, emotional_feedbacks=temp_emotional_feedbacks)
-        self._rate = rospy.Rate(60) # 60hz
+        self._rate = rospy.Rate(30) # 30hz
         sleep(0.2)  # wait some miliseconds until the video reader grabs its first frame from the capture device
 
 
@@ -611,10 +336,10 @@ class Exercise:
             self._rate.sleep()
 
         # kill video reader and timer threads
-        if self._video_reader.is_alive():
+        if isinstance(self._video_reader, OpenCVReader) and self._video_reader.is_alive():
             self._video_reader.set_kill_thread()
             self._video_reader.join()
-        print "Video reader terminated!"
+            print "Video reader terminated!"
         if self.time_limit > 0:
             if session_timer.is_alive():
                 self._encourager.say("Congratulations! You have completed all of the blocks.")
@@ -677,7 +402,7 @@ class SimpleMotionExercise(Exercise):
 
     def calibrate(self, calib_output_file=""):
         # check if capture device running
-        if not (self._video_reader.is_alive()):
+        if isinstance(self._video_reader, OpenCVReader) and not (self._video_reader.is_alive()):
             raise Exception("Capture device not initialized!")
 
         # define number of calibration points to record (depends on exercise)
@@ -720,9 +445,6 @@ class SimpleMotionExercise(Exercise):
                         else:
                             self._encourager.say("Now, stretch your right arm diagonally up and right on the table.")
                 encourager_guide_flag = False
-
-            # get next frame from capture device
-            frame = self._video_reader.img_modified
 
             # (re-)initialize timer if necessary
             if timer == None and no_center_found_counter == 0:
@@ -784,7 +506,7 @@ class SimpleMotionExercise(Exercise):
                 timer = None
 
 
-            if len(self._calibration_points_right_arm) == number_of_calibration_points:
+            if isinstance(self._video_reader, OpenCVReader) and len(self._calibration_points_right_arm) == number_of_calibration_points:
                 rospy.loginfo("Shutting down video reader...")
                 self._video_reader.set_kill_thread()
                 self._video_reader.join()
