@@ -254,6 +254,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
 
 	# initialize some other necessary variables
         self._is_calibrating = False
+        self._is_exercise_running = False
         self._bridge = CvBridge()
         
         # connect functions to widgets
@@ -707,7 +708,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         height, width, byte_value = cv_image.shape
         byte_value = byte_value * width
         img = QImage(cv_image, width, height, byte_value, QImage.Format_RGB888)
-        self.original_img_received.emit(self, img)
+        self.img_received.emit(self, img)
 
     def _smartcard_detected_callback(self, data):
         #print("Card detected!")

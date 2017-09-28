@@ -5,7 +5,6 @@ import sys, traceback
 import rospy
 from sensor_msgs.msg import Image
 from threading import Thread
-import signal
 from cv_bridge import CvBridge
 
 
@@ -20,6 +19,7 @@ from cv_bridge import CvBridge
 
 class StreamReader:
     __metaclass__ = ABCMeta
+    MIN_RADIUS = 12
 
     def __init__(self, rgb_colors, camera_resolution=(640,480), current_calibration_points=[], tolerance_x=0, tolerance_y=0):
         # Initialize camera and get actual resolution
@@ -30,8 +30,8 @@ class StreamReader:
         self._kill_thread = False
         self._tolerance_x = tolerance_x
         self._tolerance_y = tolerance_y
-        self._frame = None
-        self._frame_modified = None
+        self._frame = np.zeros((camera_resolution[0],camera_resolution[1]), dtype=np.uint8)
+        self._frame_modified = np.zeros((camera_resolution[0],camera_resolution[1]), dtype=np.uint8)
 
         # calculate HSV (or RGB!) thresholds from rgb_colors array
         self._hsv_threshold_lower = np.array([255,255,255], dtype=np.uint8)
@@ -104,10 +104,6 @@ class StreamReader:
         self._current_calibration_point_index = 0
 
     def process_frame(self):
-        # make sure that at least one frame has already been read (just in case)
-        if self._frame == None:
-            print("WARNING process_frame(): cannot process frame yet since no frame has been grabbed yet, ignoring...")
-            return
         frame_copy = self._frame.copy()
 
         # Blur image to remove noise
@@ -133,7 +129,7 @@ class StreamReader:
             M = cv2.moments(c)
             if M["m00"] > 0:
                 self._center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
-                if self._radius < MIN_RADIUS:
+                if self._radius < StreamReader.MIN_RADIUS:
                     self._center = None
 
         # draw calibration point bounding boxes on original image, if given
@@ -156,15 +152,7 @@ class OpenCVReader(StreamReader,Thread):
     def __init__(self, rgb_colors, camera_resolution=(640,480), current_calibration_points=[], tolerance_x=0, tolerance_y=0):
         Thread.__init__(self)
 
-        # define behaviour when SIGINT or SIGTERM received
-        signal.signal(signal.SIGINT, self.exit_gracefully)
-        signal.signal(signal.SIGTERM, self.exit_gracefully)
-
-    def exit_gracefully(self, signum, frame):
-	print "Captured signal, beginning graceful shutdown."
-        self.set_kill_thread()
-
-    def set_kill_thread(self):
+    def kill_video_reader(self):
         self._kill_thread = True
 
     def run(self):
@@ -197,7 +185,7 @@ class USBCamReader(StreamReader):
         rospy.Subscriber("/usb_cam/image_raw", Image, self.usbcam_img_received_callback)
 
     def usbcam_img_received_callback(self, data):
-        self._frame = self._bridge.imgmsg_to_cv2(data, encoding="bgr8")
+        self._frame = self._bridge.imgmsg_to_cv2(data, "bgr8")
         self.process_frame()
-        img_msg = bridge.cv2_to_imgmsg(self._frame, encoding="bgr8")
-        self._frame_modified_pub.publish(img_msg)
+        img_msg = self._bridge.cv2_to_imgmsg(self._frame, encoding="bgr8")
+        self._img_msg_pub.publish(img_msg)

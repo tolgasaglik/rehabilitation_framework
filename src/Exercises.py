@@ -15,7 +15,7 @@ import signal
 from rehabilitation_framework.msg import * 
 import random
 from StreamReader import USBCamReader, OpenCVReader
-import EncouragerUnit
+from EncouragerUnit import EncouragerUnit
 
 
 
@@ -87,6 +87,13 @@ class Timer(Thread):
 class Exercise:
     __metaclass__ = ABCMeta
 
+    def exit_gracefully(self):
+	print "Captured signal, beginning graceful shutdown."
+        if self._session_timer != None:
+            self._session_timer.kill_timer()
+        if isinstance(self._video_reader, OpenCVReader):
+            self._video_reader.kill_video_reader()
+
     def __init__(self, number_of_blocks=1, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), time_limit=0, robot_position=RobotPosition.LEFT):
         rospy.init_node('reha_exercise', anonymous=True)
         self.repetitions_limit = repetitions_limit
@@ -99,10 +106,14 @@ class Exercise:
         self._number_of_blocks = number_of_blocks
         self.robot_position = robot_position
         self.time_limit = time_limit
-
+        self._session_timer = None
         temp_quant_freq = 0
         temp_quali_freq = 0
         temp_emotional_feedbacks = []
+
+        # define behaviour when SIGINT or SIGTERM received
+        signal.signal(signal.SIGINT, self.exit_gracefully)
+        signal.signal(signal.SIGTERM, self.exit_gracefully)
 
         # retrieve settings from parameter server
         if rospy.has_param('/reha_exercise/camera_width') and rospy.has_param('/reha_exercise/camera_height'):
@@ -270,11 +281,11 @@ class Exercise:
         self._encourager.say("Ready?")
         sleep(2)
         self._encourager.say("Go!")
-        session_timer = None
+        self._session_timer = None
         if self.time_limit > 0:
-            session_timer = Timer(self.time_limit)
-            session_timer.start()
-        while current_block <= self._number_of_blocks or self.time_limit > 0 and session_timer.is_alive():
+            self._session_timer = Timer(self.time_limit)
+            self._session_timer.start()
+        while current_block <= self._number_of_blocks or self.time_limit > 0 and self._session_timer.is_alive():
             total_frame_counter += 1
 
             # check if last valid detected object coordinates 
@@ -327,11 +338,13 @@ class Exercise:
                                     enc_sentence += "left arm."
                                 self._encourager.say(enc_sentence)
                             else:
+                                self._encourager.say("Congratulations! You have completed all of the blocks.")
+                                sleep(2)
                                 break
                             current_block += 1
                             
             # check termination conditions
-            if self.time_limit > 0 and not session_timer.is_alive() or not self._video_reader.is_alive():
+            if self.time_limit > 0 and not self._session_timer.is_alive() or not self._video_reader.is_alive():
                 break
             self._rate.sleep()
 
@@ -341,11 +354,9 @@ class Exercise:
             self._video_reader.join()
             print "Video reader terminated!"
         if self.time_limit > 0:
-            if session_timer.is_alive():
-                self._encourager.say("Congratulations! You have completed all of the blocks.")
-                sleep(2)
-                session_timer.kill_timer()
-                session_timer.join()
+            if self._session_timer.is_alive():
+                self._session_timer.kill_timer()
+                self._session_timer.join()
             else:
                 self._encourager.say("Time is over!")
                 # TODO: play random congratulation sentence depending on performance
@@ -416,7 +427,6 @@ class SimpleMotionExercise(Exercise):
         NO_CENTER_FOUND_MAX = 200
 
         # Main calibration loop
-        timer = None
         encourager_guide_flag = True
         no_center_found_counter = 0
         no_center_found_flag = False
@@ -447,9 +457,9 @@ class SimpleMotionExercise(Exercise):
                 encourager_guide_flag = False
 
             # (re-)initialize timer if necessary
-            if timer == None and no_center_found_counter == 0:
-                timer = Timer(self.calibration_duration)
-                timer.start()
+            if self._session_timer == None and no_center_found_counter == 0:
+                self._session_timer = Timer(self.calibration_duration)
+                self._session_timer.start()
                 #if (self._limb == Limb.LEFT_ARM and len(self._calibration_points_left_arm) > 0) or (self._limb == Limb.RIGHT_ARM and len(self._calibration_points_right_arm) > 0):
                 #encourager_guide_flag = True
                 no_center_found_flag = False 
@@ -465,7 +475,7 @@ class SimpleMotionExercise(Exercise):
                         self._encourager.say("Okay. I can see your object now.")
                         #encourager_guide_flag = True
                 # store coordinates when timer has run out
-                if timer != None and timer.is_alive() == False:
+                if self._session_timer != None and self._session_timer.is_alive() == False:
                     # check if any of the recorded points are too close to each other before inserting
                     if self._limb == Limb.LEFT_ARM: 
                         # check if calibration point is valid for the left arm
@@ -493,28 +503,28 @@ class SimpleMotionExercise(Exercise):
                             self._calibration_points_right_arm.append(last_center)
                             if len(self._calibration_points_right_arm) < number_of_calibration_points:
                                 encourager_guide_flag = True
-                    timer = None
+                    self._session_timer = None
             elif no_center_found_counter < NO_CENTER_FOUND_MAX and not no_center_found_flag:
                 no_center_found_counter += 1
             #elif no_center_found_counter == NO_CENTER_FOUND_MAX and timer != None and timer.is_alive() and not no_center_found_flag:
             elif no_center_found_counter == NO_CENTER_FOUND_MAX and not no_center_found_flag:
                 no_center_found_flag = True
                 self._encourager.say("I cannot find your object. Please move it closer to the camera.")
-                if timer != None:
-                    timer.kill_timer()
-                    timer.join()
-                timer = None
+                if self._session_timer != None:
+                    self._session_timer.kill_timer()
+                    self._session_timer.join()
+                self._session_timer = None
 
 
             if isinstance(self._video_reader, OpenCVReader) and len(self._calibration_points_right_arm) == number_of_calibration_points:
                 rospy.loginfo("Shutting down video reader...")
                 self._video_reader.set_kill_thread()
                 self._video_reader.join()
-            if not self._video_reader.is_alive():
-                if timer != None:
+            if isinstance(self._video_reader, OpenCVReader) and not self._video_reader.is_alive():
+                if self._session_timer != None:
                     rospy.loginfo("Shutting down timer thread...")
-                    timer.kill_timer()
-                    timer.join()
+                    self._session_timer.kill_timer()
+                    self._session_timer.join()
                 break
             self._rate.sleep()
 
