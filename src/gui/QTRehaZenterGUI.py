@@ -11,6 +11,7 @@ from PyQt4 import QtCore, QtGui
 from PyQt4.QtCore import QThread, QRectF, Qt, pyqtSignal, pyqtSlot
 from PyQt4.QtGui import QMessageBox, QFileDialog, QWidget, QTabWidget, QLabel, QImage, QPixmap, QGraphicsScene, QGraphicsPixmapItem, QHeaderView, QTableWidgetItem
 import os,sys,inspect,ast
+from subprocess import Popen
 import rospy
 import cv2
 import MySQLdb
@@ -141,7 +142,7 @@ def logoff_signal_received_triggered(gui):
 
 class QTRehaZenterGUI(QtGui.QMainWindow):
     robot_finished = pyqtSignal(object, int, name="robot_finished")
-    img_received = pyqtSignal(object, QImage, name="img_received")
+    #img_received = pyqtSignal(object, QImage, name="img_received")
     smartcard_rosmsg_received = pyqtSignal(object, name="smartcard_rosmsg_received")
     logoff_signal_received = pyqtSignal(object, name="logoff_signal")
     _save_calib_filename = ""
@@ -249,8 +250,9 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self._calibration_request_pub = rospy.Publisher("calibration_request", CalibrationRequest, queue_size=1)
         rospy.Subscriber("exercise_reply", ExerciseReply, self._server_reply_callback)
         rospy.Subscriber("calibration_reply", CalibrationReply, self._server_reply_callback)
-        rospy.Subscriber("/usb_cam/image_modified", Image, self._img_received_callback)
+        #rospy.Subscriber("/usb_cam/image_modified", Image, self._img_received_callback)
         rospy.Subscriber("/user_logging/initial_key", String, self._smartcard_detected_callback)
+        self._encryption_node = None
 
 	# initialize some other necessary variables
         self._is_calibrating = False
@@ -279,7 +281,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.btnLoadCalibFile.clicked.connect(self.btnLoadCalibFileClicked)
         self.btnCalibrateNow.clicked.connect(self.btnCalibrateNowClicked)
         self.robot_finished.connect(robot_finished_triggered)
-        self.img_received.connect(img_received_triggered)
+        #self.img_received.connect(img_received_triggered)
         self.smartcard_rosmsg_received.connect(smartcard_rosmsg_received_triggered)
         self.logoff_signal_received.connect(logoff_signal_received_triggered)
         self.btnConfirm.clicked.connect(self.btnConfirmClicked)
@@ -723,6 +725,9 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         else:
             if self._rfid != "None" and msg == "None":
                 self._rfid = "None"
+                # kill encryption node
+                self._encryption_node.terminate()
+                self._encryption_node.wait()
                 self.logoff_signal_received.emit(self)
                 self._encourager.say("Good bye!")
                 self._encourager.show_emotion("smile")
@@ -764,6 +769,27 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             self.grProfilePicture.setVisible(True)
             self._encourager.say("Welcome back, " + tblUser_row[2] + "!")
             self._encourager.show_emotion("happy")
+            ### HARDCODED: display different information depending on user connected ###
+            if self._rfid == "3BEA00008131FE450031C573C0014000900077":
+                self.slNbrBlocks.setValue(3)
+                self.spnNbrRepetitions.setValue(25)
+                self.chkQualitative.setChecked(False)
+                self.chkQuantitative.setChecked(True)
+                self.spnQuantEncRep.setEnabled(True)
+                self.cmbQualiEnc.setEnabled(False)
+                self.spnQuantEncRep.setValue(3)
+            else:
+                self.slNbrBlocks.setValue(2)
+                self.spnNbrRepetitions.setValue(15)
+                self.chkQualitative.setChecked(True)
+                self.chkQuantitative.setChecked(True)
+                self.spnQuantEncRep.setEnabled(True)
+                self.spnQuantEncRep.setValue(2)
+                self.cmbQualiEnc.setEnabled(True)
+                self.cmbQualiEnc.setCurrentIndex(1)
+  
+            launch_params = ['roslaunch', 'simple_image_cyphering', 'one_node_encryption.launch']
+            self._encryption_node = Popen(launch_params)
         else:
             self.lblWrongPINCode.setVisible(True)
         cursor.close()
