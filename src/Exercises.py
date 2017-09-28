@@ -6,6 +6,7 @@ import sys, traceback
 import argparse
 import roslib; roslib.load_manifest('rehabilitation_framework')
 import ast
+import cv2
 import rospy,rosparam
 from std_msgs.msg import String
 from sensor_msgs.msg import Image
@@ -254,12 +255,6 @@ class Exercise:
 
     # base class method that starts the exercise
     def start_game(self, results_output_file=""):
-        # check if capture device has been initialized and calibrated
-        if not self._video_reader.is_alive():
-            raise Exception("Capture device not initialized!")
-        elif len(self._calibration_points_left_arm) == 0:
-            raise Exception("Device was not calibrated!")
-
         print "Camera dimensions: " +  str(cv2.CAP_PROP_FRAME_WIDTH) + " x " + str(cv2.CAP_PROP_FRAME_HEIGHT)
         print "Tolerance values: " + str(self._tolerance_x) + " x " + str(self._tolerance_y) + " pixels"
 
@@ -279,9 +274,9 @@ class Exercise:
         # sleep for 2 seconds in order to wait for soundplay and video reader to be ready
         sleep(2)
         self._encourager.say("Your exercise will begin soon.")
-        sleep(2)
+        sleep(5)
         self._encourager.say("Ready?")
-        sleep(2)
+        sleep(3)
         self._encourager.say("Go!")
         self._session_timer = None
         if self.time_limit > 0:
@@ -327,8 +322,8 @@ class Exercise:
                             sleep(3)
                             if current_block < self._number_of_blocks:
                                 # let patient take a break (probably not needed for now)
-                                #self._encourager.say("Take a 20 seconds break.")
-                                #sleep(20)
+                                self._encourager.say("Good! Now take a little break.")
+                                sleep(30)
                                 enc_sentence = "Now, continue your exercise with your "
                                 if self._limb == Limb.LEFT_ARM:
                                     self._limb = Limb.RIGHT_ARM
@@ -339,6 +334,10 @@ class Exercise:
                                     self._video_reader.update_calib_points(self._calibration_points_left_arm)
                                     enc_sentence += "left arm."
                                 self._encourager.say(enc_sentence)
+				sleep(5)
+				self._encourager.say("Ready?")
+				sleep(3)
+				self._encourager.say("Go!")
                             else:
                                 self._encourager.say("Congratulations! You have completed all of the blocks.")
                                 sleep(2)
@@ -346,7 +345,7 @@ class Exercise:
                             current_block += 1
                             
             # check termination conditions
-            if self.time_limit > 0 and not self._session_timer.is_alive() or not self._video_reader.is_alive():
+            if self.time_limit > 0 and not self._session_timer.is_alive() or isinstance(self._video_reader, OpenCVReader) and not self._video_reader.is_alive():
                 break
             self._rate.sleep()
 
