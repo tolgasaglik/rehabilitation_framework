@@ -70,7 +70,6 @@ class EncouragerUnit(object):
 
     def say(self, sentence):
         self._voice_pub.publish(sentence)
-        print "The robot says: \"" + sentence + "\""
 
     def show_emotion(self, emotion):
 	if emotion not in self._happy_emotions_list:

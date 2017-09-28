@@ -87,12 +87,13 @@ class Timer(Thread):
 class Exercise:
     __metaclass__ = ABCMeta
 
-    def exit_gracefully(self):
+    def exit_gracefully(self, signal, frame):
 	print "Captured signal, beginning graceful shutdown."
         if self._session_timer != None:
             self._session_timer.kill_timer()
         if isinstance(self._video_reader, OpenCVReader):
             self._video_reader.kill_video_reader()
+        self._kill_session = True
 
     def __init__(self, number_of_blocks=1, repetitions_limit=10, calibration_duration=10, camera_resolution=(640,480), time_limit=0, robot_position=RobotPosition.LEFT):
         rospy.init_node('reha_exercise', anonymous=True)
@@ -107,6 +108,7 @@ class Exercise:
         self.robot_position = robot_position
         self.time_limit = time_limit
         self._session_timer = None
+	self._kill_session = False
         temp_quant_freq = 0
         temp_quali_freq = 0
         temp_emotional_feedbacks = []
@@ -285,7 +287,7 @@ class Exercise:
         if self.time_limit > 0:
             self._session_timer = Timer(self.time_limit)
             self._session_timer.start()
-        while current_block <= self._number_of_blocks or self.time_limit > 0 and self._session_timer.is_alive():
+        while not self._kill_session and (current_block <= self._number_of_blocks or self.time_limit > 0 and self._session_timer.is_alive()):
             total_frame_counter += 1
 
             # check if last valid detected object coordinates 
@@ -349,25 +351,28 @@ class Exercise:
             self._rate.sleep()
 
         # kill video reader and timer threads
-        if isinstance(self._video_reader, OpenCVReader) and self._video_reader.is_alive():
-            self._video_reader.set_kill_thread()
-            self._video_reader.join()
-            print "Video reader terminated!"
-        if self.time_limit > 0:
-            if self._session_timer.is_alive():
-                self._session_timer.kill_timer()
-                self._session_timer.join()
-            else:
-                self._encourager.say("Time is over!")
-                # TODO: play random congratulation sentence depending on performance
-            print "Timer thread terminated!"
+	if not self._kill_session:
+	    if isinstance(self._video_reader, OpenCVReader) and self._video_reader.is_alive():
+	        self._video_reader.set_kill_thread()
+	        self._video_reader.join()
+	        print "Video reader terminated!"
+	    if self.time_limit > 0:
+	        if self._session_timer.is_alive():
+		    self._session_timer.kill_timer()
+		    self._session_timer.join()
+	        else:
+		    self._encourager.say("Time is over!")
+		    # TODO: play random congratulation sentence depending on performance
+	        print "Timer thread terminated!"
 
-        # store repetitions and time results
-        if results_output_file != "":
-	    with open(results_output_file, "w") as res_output_file:
-                res_output_file.write("repetitions_results=" + str(self._encourager.repetitions_arr)+ "\n")
-                res_output_file.write("time_results=" + str(time_arr)+ "\n")
-                res_output_file.write("trajectory_smoothness=" + str(trajectory_smoothness_arr)+ "\n")
+            # store repetitions and time results
+            if results_output_file != "":
+	        with open(results_output_file, "w") as res_output_file:
+                    res_output_file.write("repetitions_results=" + str(self._encourager.repetitions_arr)+ "\n")
+                    res_output_file.write("time_results=" + str(time_arr)+ "\n")
+                    res_output_file.write("trajectory_smoothness=" + str(trajectory_smoothness_arr)+ "\n")
+        else:
+            self._encourager.say("Exercise was interrupted!")
 
 
 # exercise that counts circular movements performed on the table surface
@@ -432,7 +437,7 @@ class SimpleMotionExercise(Exercise):
         no_center_found_flag = False
         # sleep for 2 seconds in order to wait for soundplay and video reader to be ready
         sleep(2)
-        while len(self._calibration_points_right_arm) < number_of_calibration_points:
+        while not self._kill_session and len(self._calibration_points_right_arm) < number_of_calibration_points:
             #print no_center_found_counter
             #print no_center_found_flag
             #print "-" * 60
@@ -529,7 +534,7 @@ class SimpleMotionExercise(Exercise):
             self._rate.sleep()
 
         # write calibration results to file, if property set
-        if calib_output_file != "" and len(self._calibration_points_left_arm) == number_of_calibration_points and len(self._calibration_points_right_arm) == number_of_calibration_points:
+        if not self._kill_session and calib_output_file != "" and len(self._calibration_points_left_arm) == number_of_calibration_points and len(self._calibration_points_right_arm) == number_of_calibration_points:
             self._encourager.say("Calibration completed!")
             with open(calib_output_file, "w") as calib_output_file:
                 calib_output_file.write("motion_type=" + str(self._motion_type) + "\n")
@@ -539,9 +544,8 @@ class SimpleMotionExercise(Exercise):
                 calib_output_file.write("camera_height=" + str(self._video_reader.camera_resolution[1]) + "\n")
                 calib_output_file.write("calibration_points_left_arm=" + str(self._calibration_points_left_arm)+ "\n")
                 calib_output_file.write("calibration_points_right_arm=" + str(self._calibration_points_right_arm)+ "\n")
-                print "good"
         else:
-            self._encourager.say("Calibration interrupted!")
+            self._encourager.say("Calibration was interrupted!")
     	sleep(2.5)
 
 

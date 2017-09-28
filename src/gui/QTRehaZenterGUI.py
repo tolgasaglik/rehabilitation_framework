@@ -477,7 +477,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
                     msg.emotional_feedback_list.append(emotional_feedback)
         # show error dialog if files fail to load
         try:
-            msg.rgb_colors = load_color_file(currentdir + "/" + str(self.lnColorFile.text()))
+            msg.rgb_colors = load_color_file(str(self.lnColorFile.text()))
         except ValueError:
             self.msgErrorWarning.setText("The specified color file has invalid contents!")
             self.msgErrorWarning.setWindowTitle("Invalid color file")
@@ -489,7 +489,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             self.msgErrorWarning.exec_()
             return
         try:
-            calib_data = load_calib_file(currentdir + "/" + str(self.lnCalibFile.text()))
+            calib_data = load_calib_file(str(self.lnCalibFile.text()))
         except ValueError:
             self.msgErrorWarning.setText("The specified calibration file has invalid contents!")
             self.msgErrorWarning.setWindowTitle("Invalid calibration file")
