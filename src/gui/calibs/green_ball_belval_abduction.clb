@@ -1,0 +1,5 @@
+motion_type=2
+rotation_type=0
+robot_position=0
+calibration_points_left_arm=[(226,293),(261,460)]
+calibration_points_right_arm=[(225,293),(42,282)]

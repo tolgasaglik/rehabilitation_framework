@@ -15,6 +15,7 @@ from subprocess import Popen
 import rospy
 import cv2
 import MySQLdb
+import numpy as np
 from Crypto.Hash import SHA256
 # include parent "src" directory to sys.path, otherwise import won't work
 # (source: http://stackoverflow.com/questions/714063/importing-modules-from-parent-folder)
@@ -27,7 +28,7 @@ from PyQt4 import uic
 #from Exercises import Limb,RotationType,MotionType,RobotPosition
 from rehabilitation_framework.msg import *
 from std_msgs.msg import Bool,String
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image,CompressedImage
 import DefineNewColor
 from cv_bridge import CvBridge
 import csv
@@ -250,9 +251,9 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self._calibration_request_pub = rospy.Publisher("calibration_request", CalibrationRequest, queue_size=1)
         rospy.Subscriber("exercise_reply", ExerciseReply, self._server_reply_callback)
         rospy.Subscriber("calibration_reply", CalibrationReply, self._server_reply_callback)
-        rospy.Subscriber("/plain/image_raw/compressed", Image, self._img_received_callback)
+        rospy.Subscriber("/plain/image_modified/compressed", CompressedImage, self._img_received_callback)
         rospy.Subscriber("/user_logging/initial_key", String, self._smartcard_detected_callback)
-        self._encryption_node = None
+        #self._decryption_node = None
 
 	# initialize some other necessary variables
         self._is_calibrating = False
@@ -706,7 +707,13 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.robot_finished.emit(self, data.status)
 
     def _img_received_callback(self, data):
-        cv_image = self._bridge.imgmsg_to_cv2(data, desired_encoding="rgb8")
+        # CompressedImage ROS messages are incompatible with cv2.bridge, conversion to numpy array and THEN to cv2 format possible however
+        #cv_image = self._bridge.imgmsg_to_cv2(data, desired_encoding="rgb8")
+        
+        np_arr = np.fromstring(data.data, np.uint8)
+        cv_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        cv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
+        
         height, width, byte_value = cv_image.shape
         byte_value = byte_value * width
         img = QImage(cv_image, width, height, byte_value, QImage.Format_RGB888)
@@ -725,9 +732,9 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         else:
             if self._rfid != "None" and msg == "None":
                 self._rfid = "None"
-                # kill encryption node
-                self._encryption_node.terminate()
-                self._encryption_node.wait()
+                # kill decryption node
+                #self._decryption_node.terminate()
+                #self._decryption_node.wait()
                 self.logoff_signal_received.emit(self)
                 self._encourager.say("Good bye!")
                 self._encourager.show_emotion("smile")
@@ -789,8 +796,8 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
                 self.cmbQualiEnc.setEnabled(True)
                 self.cmbQualiEnc.setCurrentIndex(1)
   
-            launch_params = ['roslaunch', 'simple_image_cyphering', 'one_node_encryption.launch']
-            self._encryption_node = Popen(launch_params)
+            #launch_params = ['roslaunch', 'simple_image_cyphering', 'one_node_decryption.launch']
+            #self._decryption_node = Popen(launch_params)
         else:
             self.lblWrongPINCode.setVisible(True)
         cursor.close()

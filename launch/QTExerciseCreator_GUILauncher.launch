@@ -1,4 +1,15 @@
 <launch>
   <node pkg="iotchallenge" type="monitoring_tool.py" name="monitoring_tool" output="screen" />
   <node pkg="rehabilitation_framework" type="QTRehaZenterGUI.py" name="reha_interface" output="screen" />
+
+  <!-- =========================== -->
+  <!-- Image Decryption Activation -->
+  <!-- =========================== -->
+  <arg name="ciphering" default="3DES"/>     <!-- Opciones: 3DES, AES, RSA, BF -->
+
+  <node name="decrypter" pkg="simple_image_cyphering" type="image_decrypt_node.py" output="screen">
+    <param name="ciphering" value="$(arg ciphering)" />
+    <param name="topic_name_input" value="/encrypted/image_raw/compressed" />
+    <param name="topic_name_output" value="/plain/image_raw/compressed" />
+  </node>
 </launch>
