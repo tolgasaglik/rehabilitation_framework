@@ -19,7 +19,7 @@ from cv_bridge import CvBridge
 
 class StreamReader:
     __metaclass__ = ABCMeta
-    MIN_RADIUS = 12
+    MIN_RADIUS = 20
 
     def __init__(self, rgb_colors, camera_resolution=(640,480), current_calibration_points=[], tolerance_x=0, tolerance_y=0):
         # Initialize camera and get actual resolution
@@ -182,7 +182,7 @@ class OpenCVReader(StreamReader,Thread):
 class USBCamReader(StreamReader):
     def __init__(self, rgb_colors, camera_resolution=(640,480), current_calibration_points=[], tolerance_x=0, tolerance_y=0):
         StreamReader.__init__(self, rgb_colors, camera_resolution, current_calibration_points, tolerance_x, tolerance_y)
-        rospy.Subscriber("/usb_cam/image_raw", Image, self.usbcam_img_received_callback)
+        rospy.Subscriber("/plain/image_raw/compressed", Image, self.usbcam_img_received_callback)
 
     def usbcam_img_received_callback(self, data):
         self._frame = self._bridge.imgmsg_to_cv2(data, "bgr8")

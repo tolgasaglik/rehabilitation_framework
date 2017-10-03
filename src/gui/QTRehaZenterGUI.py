@@ -142,7 +142,7 @@ def logoff_signal_received_triggered(gui):
 
 class QTRehaZenterGUI(QtGui.QMainWindow):
     robot_finished = pyqtSignal(object, int, name="robot_finished")
-    #img_received = pyqtSignal(object, QImage, name="img_received")
+    img_received = pyqtSignal(object, QImage, name="img_received")
     smartcard_rosmsg_received = pyqtSignal(object, name="smartcard_rosmsg_received")
     logoff_signal_received = pyqtSignal(object, name="logoff_signal")
     _save_calib_filename = ""
@@ -250,7 +250,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self._calibration_request_pub = rospy.Publisher("calibration_request", CalibrationRequest, queue_size=1)
         rospy.Subscriber("exercise_reply", ExerciseReply, self._server_reply_callback)
         rospy.Subscriber("calibration_reply", CalibrationReply, self._server_reply_callback)
-        #rospy.Subscriber("/usb_cam/image_modified", Image, self._img_received_callback)
+        rospy.Subscriber("/plain/image_raw/compressed", Image, self._img_received_callback)
         rospy.Subscriber("/user_logging/initial_key", String, self._smartcard_detected_callback)
         self._encryption_node = None
 
@@ -281,7 +281,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
         self.btnLoadCalibFile.clicked.connect(self.btnLoadCalibFileClicked)
         self.btnCalibrateNow.clicked.connect(self.btnCalibrateNowClicked)
         self.robot_finished.connect(robot_finished_triggered)
-        #self.img_received.connect(img_received_triggered)
+        self.img_received.connect(img_received_triggered)
         self.smartcard_rosmsg_received.connect(smartcard_rosmsg_received_triggered)
         self.logoff_signal_received.connect(logoff_signal_received_triggered)
         self.btnConfirm.clicked.connect(self.btnConfirmClicked)
@@ -750,6 +750,7 @@ class QTRehaZenterGUI(QtGui.QMainWindow):
             # permit access to user and enable widgets accordingly
             self.lblWrongPINCode.setVisible(False)
             self.tabWidget.setTabEnabled(1, True)
+            self.tabWidget.setTabEnabled(2, True)
             self.tabWidget.setTabEnabled(3, True)
             self.tabWidget.setTabEnabled(4, True)
             self.lblAuth.setEnabled(False)

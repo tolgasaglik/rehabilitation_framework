@@ -13,7 +13,17 @@
   <node name="wm_voice_generator_node" pkg="wm_voice_generator" type="wm_voice_component_short.py" output="screen" />
     
   <!-- =========================== --> 
-  <!-- Exercise server  Activation --> 
+  <!-- Exercise Server  Activation -->
   <!-- =========================== --> 
   <node pkg="rehabilitation_framework" type="RosServer.py" name="reha_exercise" output="screen" />
+
+  <!-- =========================== -->
+  <!-- Image Encryption Activation -->
+  <!-- =========================== -->
+  <arg name="ciphering" default="3DES"/>    <!-- Opciones: 3DES, AES, RSA, BF -->
+  <node name="encrypter" pkg="simple_image_cyphering" type="image_encrypt_node.py" output="screen">
+    <param name="ciphering" value="$(arg ciphering)" />
+    <param name="topic_name_input" value="/usb_cam/image_raw/compressed" />
+    <param name="topic_name_output" value="/encrypted/image_raw/compressed" />
+  </node>
 </launch>
