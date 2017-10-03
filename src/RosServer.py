@@ -123,7 +123,22 @@ class RosServer(object):
             # clean up
             self._exercise_reply_pub.publish(exercise_reply)
             del self._exercise_instance
-            self._exercise_instance = None		
+            self._exercise_instance = None
+            
+            # remove ROS parameters from server
+            rosparam.delete_param(self._NODE_NAME + "/motion_type")
+            rosparam.delete_param(self._NODE_NAME + "/rotation_type")
+            rosparam.delete_param(self._NODE_NAME + "/camera_width")
+            rosparam.delete_param(self._NODE_NAME + "/camera_height")
+            rosparam.delete_param(self._NODE_NAME + "/robot_position")
+            rosparam.delete_param(self._NODE_NAME + "/number_of_blocks")
+            rosparam.delete_param(self._NODE_NAME + "/rgb_colors")
+            rosparam.delete_param(self._NODE_NAME + "/repetitions_limit")
+            rosparam.delete_param(self._NODE_NAME + "/time_limit")
+            rosparam.delete_param(self._NODE_NAME + "/calibration_points_left_arm")
+            rosparam.delete_param(self._NODE_NAME + "/calibration_points_right_arm")
+            rosparam.delete_param(self._NODE_NAME + "/quantitative_frequency")
+            rosparam.delete_param(self._NODE_NAME + "/qualitative_frequency")
         else:
             rospy.loginfo("Received invalid exercise configuration! Aborting exercise creation.")
 
@@ -193,6 +208,15 @@ class RosServer(object):
             self._calibration_reply_pub.publish(calibration_reply)
             del self._exercise_instance
             self._exercise_instance = None
+
+            # remove ROS parameters from server
+            rosparam.delete_param(self._NODE_NAME + "/motion_type")
+            rosparam.delete_param(self._NODE_NAME + "/rotation_type")
+            rosparam.delete_param(self._NODE_NAME + "/camera_width")
+            rosparam.delete_param(self._NODE_NAME + "/camera_height")
+            rosparam.delete_param(self._NODE_NAME + "/robot_position")
+            rosparam.delete_param(self._NODE_NAME + "/rgb_colors")
+            rosparam.delete_param(self._NODE_NAME + "/calibration_duration")
 
     def _exercise_stop_callback(self, data):
         # data=True: exercise, data=False: calibration only
