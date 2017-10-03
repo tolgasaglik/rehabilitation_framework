@@ -53,7 +53,7 @@ class StreamReader:
         self._current_calibration_points = current_calibration_points
 
         # initialize publisher
-        self._img_msg_pub = rospy.Publisher("/plain/image_modified/compressed", Image, queue_size=5) # not sure if this works?
+        self._img_msg_pub = rospy.Publisher("/usb_cam/image_modified/compressed", CompressedImage, queue_size=5) # not sure if this works?
         self._rate = rospy.Rate(30) # 30hz
 
         # initialize OpenCV bridge
@@ -182,14 +182,14 @@ class OpenCVReader(StreamReader,Thread):
 class USBCamReader(StreamReader):
     def __init__(self, rgb_colors, camera_resolution=(640,480), current_calibration_points=[], tolerance_x=0, tolerance_y=0):
         StreamReader.__init__(self, rgb_colors, camera_resolution, current_calibration_points, tolerance_x, tolerance_y)
-        rospy.Subscriber("/plain/image_raw/compressed", CompressedImage, self.usbcam_img_received_callback)
+        rospy.Subscriber("/usb_cam/image_raw/compressed", CompressedImage, self.usbcam_img_received_callback)
 
     def usbcam_img_received_callback(self, data):
         #self._frame = self._bridge.imgmsg_to_cv2(data, "bgr8")
         #img_msg = self._bridge.cv2_to_imgmsg(self._frame, encoding="bgr8")
         # read image data from message, convert to OpenCV format and process image
         np_arr = np.fromstring(data.data, np.uint8)
-        cv_image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        self._frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
         self.process_frame()
         
         # create CompressedIamge message

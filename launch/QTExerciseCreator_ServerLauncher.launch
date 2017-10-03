@@ -23,7 +23,7 @@
   <arg name="ciphering" default="3DES"/>    <!-- Opciones: 3DES, AES, RSA, BF -->
   <node name="encrypter" pkg="simple_image_cyphering" type="image_encrypt_node.py" output="screen">
     <param name="ciphering" value="$(arg ciphering)" />
-    <param name="topic_name_input" value="/usb_cam/image_raw/compressed" />
+    <param name="topic_name_input" value="/usb_cam/image_modified/compressed" />
     <param name="topic_name_output" value="/encrypted/image_raw/compressed" />
   </node>
 </launch>
