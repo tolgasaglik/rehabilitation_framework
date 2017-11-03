@@ -30,6 +30,7 @@ class RotationType:
 class MotionType:
     _unused, FLEXION, ABDUCTION = range(3)
 
+
 # method that processes the arguments given as a parameter
 def process_args(argv):
 # define arguments to parse from the argument vector
