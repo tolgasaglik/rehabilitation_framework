@@ -34,13 +34,18 @@ Then, create a new database called *"iot"* and grant your newly-created user ful
 
 ```
 CREATE DATABASE iot;
-GRANT ALL ON iot.* TO 'qt_exercise_creator'@'*[IP_of_your_client_machine]*';
+GRANT ALL ON iot.* TO 'qt_exercise_creator'@'[IP_of_your_client_machine]';
 ```
-Make sure that both the robot and your client machine are located on the same network, and use your machine's IP address from that same network. The SQL command above will then allow you to remotely access the database through the user *"qt\_exercise\_creator"* that we created earlier. Finally, you can run the GUI application on your client machine by navigating to the *reha\_game/src/gui* folder and running the Python GUI using the following command:
+Make sure that both the robot and your client machine are located on the same network, and use your machine's IP address from that same network. The SQL command above will then allow you to remotely access the database through the user *"qt\_exercise\_creator"* that we created earlier.
+Finally, you can run the application by first running the server instance on the robot using the following command:
 
-`python QTRehaZenterGUI.py`
+`roslaunch rehabilitation_framework QTExerciseCreator_ServerLauncher.launch`
 
-Make sure that roscore is running on the robot before executing the above command, as the GUI depends on it.
+Then, after the server instance is running, simply launch the appropriate client launch file on your local machine by running:
+
+`roslaunch rehabilitation_framework QTExerciseCreator_GUILauncher.launch`
+
+This will bring up the GUI interface that remotely connects to the QT robot server instance, and you're free to configure your exercise setup however you like.
 
 ### Who do I talk to? ###
 
