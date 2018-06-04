@@ -30,13 +30,15 @@ You may choose an arbitrary password if you wish, but if you do so, then make su
 
 `mysql_password = "*[your_password]*"`
 
-Then, create a new database called *"iot"* and grant your newly-created user full access rights on that database:
+Then, create a new database called *"iot"* and grant your newly-created user full access rights on that database, then flush priveleges to make grants work:
 
 ```
 CREATE DATABASE iot;
 GRANT ALL ON iot.* TO 'qt_exercise_creator'@'[IP_of_your_client_machine]';
+FLUSH PRIVILEGES;
 ```
 Make sure that both the robot and your client machine are located on the same network, and use your machine's IP address from that same network. The SQL command above will then allow you to remotely access the database through the user *"qt\_exercise\_creator"* that we created earlier.
+
 Finally, you can run the application by first running the server instance on the robot using the following command:
 
 `roslaunch rehabilitation_framework QTExerciseCreator_ServerLauncher.launch`
