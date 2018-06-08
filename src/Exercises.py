@@ -18,6 +18,31 @@ import random
 from StreamReader import USBCamReader, OpenCVReader
 from EncouragerUnit import EncouragerUnit
 
+# Import openpose items
+from std_msgs.msg import Int32, String
+from openpose_ros_msgs.msg import *
+
+class BodyNode:
+    # OPENPOSE BODY CONSTANTS
+    C_NOSE = 0
+    C_NECK = 1
+    C_RIGHT_SHOULDER = 2
+    C_RIGHT_ELBOW = 3
+    C_RIGHT_WRIST = 4
+    C_LEFT_SHOULDER = 5
+    C_LEFT_ELBOW = 6
+    C_LEFT_WRIST = 7
+    C_RIGHT_HIP = 8
+    C_RIGHT_KNEE = 9
+    C_RIGHT_ANKLE = 10
+    C_LEFT_HIP = 11
+    C_LEFT_KNEE = 12
+    C_LEFT_ANKLE = 13
+    C_RIGHT_EYE = 14
+    C_LEFT_EYE = 15
+    C_RIGHT_EAR = 16
+    C_LEFT_EAR = 17
+    C_BACKGROUND = 18
 
 
 # some class definitions that represent enums
@@ -258,6 +283,10 @@ class Exercise:
     def start_game(self, results_output_file=""):
         print "Camera dimensions: " +  str(cv2.CAP_PROP_FRAME_WIDTH) + " x " + str(cv2.CAP_PROP_FRAME_HEIGHT)
         print "Tolerance values: " + str(self._tolerance_x) + " x " + str(self._tolerance_y) + " pixels"
+        
+        # Initialize openpose object
+        OP = OpenposeReader()
+    
 
         # Main loop
         index=0
@@ -288,7 +317,17 @@ class Exercise:
 
             # check if last valid detected object coordinates 
             last_center = self._video_reader.last_valid_center
-            if self._video_reader.last_valid_center != None :
+            print("Last center before is: x="+last_center[0]+",y="+last_center[1])
+            last_center = [0,0]
+            if self._limb == Limb.LEFT_ARM:
+                last_center[0] = OP.LEFT_HAND.x
+                last_center[1] = OP.LEFT_HAND.y
+            else:
+                last_center[0] = OP.RIGHT_HAND.x
+                last_center[1] = OP.RIGHT_HAND.y
+            print("Last center after is: x="+last_center[0]+",y="+last_center[1])
+            
+            if last_center != [0,0] :
                 # here, we check if the detected object is within the line connecting the current calibration points pair (up to some threshold)
                 if self._limb == Limb.LEFT_ARM:
                     x_check = (last_center[0] - (self._calibration_points_left_arm[index])[0]) / ((self._calibration_points_left_arm[(index+1) % len(self._calibration_points_left_arm)])[0] - (self._calibration_points_left_arm[index])[0])
@@ -547,6 +586,32 @@ class SimpleMotionExercise(Exercise):
         else:
             self._encourager.say("Calibration was interrupted!")
     	sleep(2.5)
+
+
+class OpenposeReader():
+    def __init__(self):
+	self.LEFT_HAND = [0,0,0]
+	self.RIGHT_HAND = [0,0,0]
+        self.PATIENT = OpenPoseHuman()
+        self.init_node()
+
+    def init_node(self):
+        #rospy.init_node("gesture_detector", anonymous=True)
+        rospy.Subscriber("/openpose_ros/human_list", OpenPoseHumanList, self.callback)
+        r = rospy.Rate(2)
+        while not rospy.is_shutdown():
+            r.sleep()  # sleep for one second
+        # rospy.spin()
+
+    def callback(self, msg):
+        # PATIENT has body_key_points_with_prob
+        if msg.human_list != None:
+           for human in msg.human_list:
+               self.PATIENT = human
+           # if self.PATIENT.body_key_points_with_prob[BodyNode.C_LEFT_WRIST].x > 0 or self.PATIENT.body_key_points_with_prob[BodyNode.C_LEFT_WRIST].y > 0:
+               self.LEFT_HAND = self.PATIENT.body_key_points_with_prob[BodyNode.C_LEFT_WRIST]
+           # if self.PATIENT.body_key_points_with_prob[BodyNode.C_RIGHT_WRIST].x > 0 and self.PATIENT.body_key_points_with_prob[BodyNode.C_RIGHT_WRIST].y > 0:
+               self.RIGHT_HAND = self.PATIENT.body_key_points_with_prob[BodyNode.C_RIGHT_WRIST]
 
 
 
